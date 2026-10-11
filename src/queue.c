@@ -1,0 +1,1 @@
+﻿/* FIFO crawl queue storing normalized URL plus crawl depth belongs here. */
