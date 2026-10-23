@@ -1,4 +1,4 @@
-﻿#include "project.h"
+#include "project.h"
 
 const char *crawler_status_string(CrawlerStatus status)
 {
@@ -20,9 +20,10 @@ CrawlerStatus crawler_run(const CrawlerConfig *config, CrawlerStats *stats)
         *stats = (CrawlerStats){0};
     }
     if (config == NULL || stats == NULL || config->start_url == NULL ||
-        config->start_url[0] == '\0') {
+        config->start_url[0] == '\0' ||
+        (config->same_domain != 0 && config->same_domain != 1) ||
+        config->timeout_seconds <= 0) {
         return CRAWLER_INVALID_ARGUMENT;
     }
     return CRAWLER_NOT_IMPLEMENTED;
 }
-

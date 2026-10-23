@@ -1,9 +1,28 @@
-﻿# Test plan
+# Testing
 
-- Valid and invalid start URLs; null and empty arguments.
-- Normal HTML with title, headings, paragraphs, metadata, and links.
-- Missing title, empty HTML, malformed HTML, large HTML.
-- Absolute and relative links, normalized duplicates, repeated discoveries.
-- Same-domain filtering and depth boundary behavior (root is depth 0).
-- Unreachable host, timeout, redirect, and non-success HTTP status.
-- Allocation and cleanup failure paths; use AddressSanitizer/Valgrind where available.
+## Part 1 automated tests
+
+Run `make test`. The current test program verifies:
+
+- NULL configuration and NULL statistics pointers.
+- NULL and empty starting URLs.
+- Invalid domain flag and non-positive timeout.
+- Valid configuration returns `CRAWLER_NOT_IMPLEMENTED`.
+- Statistics are zeroed on both valid and invalid calls when the output pointer exists.
+- Every defined status and an unknown status value produce readable messages.
+
+## CLI checks
+
+Run `make` first. In PowerShell:
+
+```powershell
+.\build\crawler-demo.exe https://example.org 2
+.\build\crawler-demo.exe
+.\build\crawler-demo.exe https://example.org nope
+```
+
+The first command should print a clear not-implemented message and exit successfully. The latter commands should report invalid usage and exit non-zero.
+
+## Later test coverage
+
+Once the corresponding modules exist, add tests for URLs, HTML, relative and duplicate links, domain/depth boundaries, network failures, large input, and cleanup on allocation failures. Use AddressSanitizer or Valgrind only when available for the selected Windows environment. These later behaviors are not tested or claimed in Part 1.

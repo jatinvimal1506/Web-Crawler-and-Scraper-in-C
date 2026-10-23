@@ -1,9 +1,11 @@
-﻿# Memory and error-handling contract
+# Memory and error-handling contract
 
 ## Public API
 
-`CrawlerConfig` and its `start_url` are borrowed by `crawler_run` and must remain valid until it returns. The caller owns `CrawlerStats`; the function initializes it before processing. The current API returns status codes and does not allocate caller-visible memory.
+The caller owns `CrawlerConfig`, its `start_url` string, and `CrawlerStats`. These objects and the URL string must remain valid during `crawler_run`. The function initializes all statistics to zero before validating the configuration whenever the stats pointer is non-NULL.
 
-## Internal modules (to define during implementation)
+The Part 1 API allocates no caller-visible or dynamic memory. `crawler_status_string` returns a pointer to a static string; do not free or modify it. The library reports errors with a `CrawlerStatus` value and never exits the process.
 
-For every allocating function, document whether returned strings/buffers are owned by the caller or module, how they are freed, and what output state is guaranteed after failure. Free partially built results on all error paths. Report invalid input, allocation, network, and parse failures via `CrawlerStatus`; do not terminate the process from library code.
+## Future internal modules
+
+Before adding allocating functions, document whether returned strings and buffers belong to the caller or module, how they are freed, and what output state is guaranteed after failure. Free partially built results on every error path. Report invalid input, allocation, network, and parse failures through `CrawlerStatus`.
