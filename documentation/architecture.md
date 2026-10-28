@@ -1,28 +1,17 @@
-# Architecture and implementation plan
+﻿# Architecture
 
-## Library boundary
+The project keeps the library and demonstration application separate. The Makefile compiles each module into `build/`, archives them into `libcrawler.a`, then links the CLI and tests.
 
-The public API lives in `include/project.h`; its initial implementation is in `src/project.c`. The separate program in `examples/demo.c` calls that API and owns command-line parsing and output. The test executable in `tests/test_crawler.c` links to the same static library as the demo.
+## Implemented modules
 
-The Makefile compiles each source file independently into `build/`, archives the objects as `build/libcrawler.a`, then links the demo and tests against the archive.
+- `project.c` / `project.h`: Part 1 public crawler API, input validation, statuses, and statistics initialization. A valid crawl request returns not implemented.
+- `url.c` / `url.h`: Part 2 URL parsing, validation, normalization, relative-reference resolution, and memory cleanup.
+- `examples/demo.c`: Part 1 CLI that validates its arguments and demonstrates the current API status.
+
+## Reserved module boundaries
+
+`http.c`, `html.c`, `queue.c`, and `visited.c` are placeholders for Parts 3–5. Their intended future roles are HTTP downloading, HTML extraction, breadth-first queueing, and duplicate tracking. They are not linked as functional implementations today.
 
 ## Planned data flow
 
-Start URL -> parse/normalize -> FIFO queue -> HTTP download -> HTML extraction -> resolve and filter links -> visited set -> queue. The CLI will call the reusable library and print extracted information and crawl statistics after these later parts are implemented.
-
-## Module responsibilities
-
-- `project.c`: validate API arguments, coordinate future modules, enforce depth/domain rules, and report statistics.
-- `url.c`: later implement URL validation, parsing, relative resolution, and normalization.
-- `http.c`: later implement downloading, timeout/status handling, and byte accounting.
-- `html.c`: later implement title, headings, links, paragraphs, and metadata extraction.
-- `queue.c`: later implement a breadth-first FIFO of URL/depth entries.
-- `visited.c`: later track normalized URLs and reject duplicates.
-
-At this stage, the five future module files are comments/placeholders. They do not parse or download anything. A valid configuration returns `CRAWLER_NOT_IMPLEMENTED`.
-
-## Crawl rules for later parts
-
-The root URL has depth 0. Do not enqueue links beyond `max_depth`. In same-domain mode, skip links whose normalized host differs from the start host. Concurrent workers are an optional extension after the single-threaded crawler is complete.
-
-See [progress.md](progress.md) for current scope and [api.md](api.md) for the Part 1 API contract.
+Start URL → normalize → queue → download → parse and extract links → resolve and filter → visited set → queue. The root page will have depth zero; same-domain filtering and maximum depth will be applied by the future crawl engine. Concurrency is an optional extension.

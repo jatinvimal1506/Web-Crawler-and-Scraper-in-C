@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdio.h>
 
 
 // static:- the function  can only be called from within this file. It is not visible to other files in the project.
@@ -145,10 +146,19 @@ int url_parse(const char *input, ParsedUrl *result)
     // Support lowercase HTTP and HTTPS for now.
     int is_http =
         scheme_length == 4 &&
-        strncmp(input, "http", 4) == 0;
+        tolower((unsigned char)input[0]) == 'h' &&
+        tolower((unsigned char)input[1]) == 't' &&
+        tolower((unsigned char)input[2]) == 't' &&
+        tolower((unsigned char)input[3]) == 'p';
     int is_https =
         scheme_length == 5 &&
-        strncmp(input, "https", 5) == 0;
+        is_http && 0; /* overwritten below for clarity */
+    is_https = scheme_length == 5 &&
+        tolower((unsigned char)input[0]) == 'h' &&
+        tolower((unsigned char)input[1]) == 't' &&
+        tolower((unsigned char)input[2]) == 't' &&
+        tolower((unsigned char)input[3]) == 'p' &&
+        tolower((unsigned char)input[4]) == 's';
     if (!is_http && !is_https) {
         return -1;
     }
@@ -295,11 +305,17 @@ int url_parse(const char *input, ParsedUrl *result)
      *
      * copy_text() was created in Part 2.1.
      */
-    result->scheme =
-        copy_text(input, scheme_length);
+    result->scheme = copy_text(input, scheme_length);
+    if (result->scheme != NULL) {
+        for (size_t i = 0; i < scheme_length; ++i)
+            result->scheme[i] = (char)tolower((unsigned char)result->scheme[i]);
+    }
 
-    result->host =
-        copy_text(authority_start, host_length);
+    result->host = copy_text(authority_start, host_length);
+    if (result->host != NULL) {
+        for (size_t i = 0; i < host_length; ++i)
+            result->host[i] = (char)tolower((unsigned char)result->host[i]);
+    }
 
     // Store the optional port without its colon.
     if (port_separator != NULL) {
@@ -349,4 +365,91 @@ int url_parse(const char *input, ParsedUrl *result)
     }
     // All components were processed successfully.
     return 0;
+}
+
+/* Join components while excluding fragments from crawler identity. */
+int url_normalize(const char *input, char **output)
+{
+    ParsedUrl u = {0};
+    char *path = NULL;
+    size_t *segments = NULL, count = 0, cap, n, i = 0, outn = 0;
+    char *joined = NULL;
+    int result = -1;
+    if (output == NULL) return -1;
+    *output = NULL;
+    if (url_parse(input, &u) != 0) return -1;
+    if (u.port != NULL && ((strcmp(u.scheme,"http")==0 && strcmp(u.port,"80")==0) ||
+                           (strcmp(u.scheme,"https")==0 && strcmp(u.port,"443")==0))) {
+        free(u.port); u.port = NULL;
+    }
+    n = strlen(u.path); cap = n + 1;
+    path = malloc(n + 2); segments = malloc((n + 1) * sizeof(*segments));
+    if (!path || !segments) goto done;
+    path[outn++] = '/';
+    while (i < n) {
+        size_t start, len;
+        while (i < n && u.path[i] == '/') ++i;
+        start = i;
+        while (i < n && u.path[i] != '/') ++i;
+        len = i - start;
+        if (len == 0 || (len == 1 && u.path[start] == '.')) continue;
+        if (len == 2 && u.path[start] == '.' && u.path[start+1] == '.') {
+            if (count) outn = segments[--count];
+            continue;
+        }
+        segments[count++] = outn;
+        if (outn > 1) path[outn++] = '/';
+        memcpy(path + outn, u.path + start, len); outn += len;
+    }
+    if (outn == 0) path[outn++] = '/';
+    path[outn] = '\0';
+    (void)cap;
+    {
+        size_t need = strlen(u.scheme)+3+strlen(u.host)+strlen(path)+1;
+        if (u.port) need += strlen(u.port)+1;
+        if (u.query) need += strlen(u.query)+1;
+        joined = malloc(need);
+        if (!joined) goto done;
+        snprintf(joined, need, "%s://%s%s%s%s%s%s", u.scheme, u.host,
+            u.port ? ":" : "", u.port ? u.port : "", path,
+            u.query ? "?" : "", u.query ? u.query : "");
+    }
+    *output = joined; joined = NULL; result = 0;
+done:
+    free(joined); free(path); free(segments); url_free(&u); return result;
+}
+
+/* Resolve the common HTTP reference forms used by links in HTML pages. */
+int url_resolve(const char *base, const char *relative, char **output)
+{
+    ParsedUrl b = {0};
+    char *candidate = NULL, *authority = NULL, *dir = NULL;
+    size_t need;
+    int rc = -1;
+    if (!output) return -1;
+    *output = NULL;
+    if (!base || !relative || url_parse(base, &b) != 0) return -1;
+    if (strstr(relative, "://") != NULL) return url_normalize(relative, output);
+    need = strlen(b.scheme)+strlen(b.host)+strlen(b.path)+strlen(relative)+strlen(b.port ? b.port : "")+16;
+    candidate = malloc(need); authority = malloc(strlen(b.host)+strlen(b.port ? b.port : "")+2);
+    if (!candidate || !authority) goto done;
+    snprintf(authority, strlen(b.host)+strlen(b.port ? b.port : "")+2, "%s%s%s", b.host, b.port?":":"", b.port?b.port:"");
+    if (relative[0] == '/' && relative[1] == '/') snprintf(candidate, need, "%s:%s", b.scheme, relative);
+    else if (relative[0] == '/') snprintf(candidate, need, "%s://%s%s", b.scheme, authority, relative);
+    else if (relative[0] == '?' || relative[0] == '#') {
+        char *base_path = malloc(strlen(b.path)+1);
+        if (!base_path) goto done;
+        strcpy(base_path, b.path);
+        snprintf(candidate, need, "%s://%s%s%s%s", b.scheme, authority, base_path, relative[0]=='?' ? "" : "", relative);
+        free(base_path);
+    } else {
+        size_t plen = strlen(b.path), cut = plen;
+        while (cut && b.path[cut-1] != '/') --cut;
+        dir = malloc(cut+1); if (!dir) goto done;
+        memcpy(dir, b.path, cut); dir[cut]='\0';
+        snprintf(candidate, need, "%s://%s%s%s", b.scheme, authority, dir, relative);
+    }
+    rc = url_normalize(candidate, output);
+done:
+    free(dir); free(candidate); free(authority); url_free(&b); return rc;
 }

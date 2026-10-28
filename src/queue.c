@@ -1,2 +1,2 @@
-/* FIFO crawl queue storing normalized URL plus crawl depth belongs here. */
+/* Breadth-first crawl queue is reserved for Part 5. */
 typedef int crawler_queue_module_placeholder;

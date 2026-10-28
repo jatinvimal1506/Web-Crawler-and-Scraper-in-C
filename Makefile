@@ -7,6 +7,7 @@ SOURCES := src/project.c src/url.c src/http.c src/html.c src/queue.c src/visited
 OBJECTS := $(SOURCES:src/%.c=$(BUILD)/%.o)
 DEMO := $(BUILD)/crawler-demo.exe
 TEST := $(BUILD)/test-crawler.exe
+URL_TEST := $(BUILD)/test-url.exe
 
 # Use native Windows commands so PowerShell/Windows builds do not require WSL.
 SHELL = cmd.exe
@@ -30,8 +31,14 @@ $(DEMO): examples/demo.c $(LIB)
 $(TEST): tests/test_crawler.c $(LIB)
 	$(CC) $(CFLAGS) $< $(LIB) -o $@
 
-test: $(TEST)
+$(URL_TEST): tests/test_url.c $(LIB)
+	$(CC) $(CFLAGS) $< $(LIB) -o $@
+
+
+test: $(TEST) $(URL_TEST)
 	.\build\test-crawler.exe
+	.\build\test-url.exe
 
 clean:
 	if exist "$(BUILD)" rmdir /s /q "$(BUILD)"
+

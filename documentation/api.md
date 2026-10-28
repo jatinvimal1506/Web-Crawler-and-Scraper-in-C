@@ -1,28 +1,14 @@
-# Public API
+﻿# Public API
 
-The public interface is declared in `include/project.h`. Include that header and link the static library, `build/libcrawler.a`.
+The Part 1 crawler interface is declared in `include/project.h`. `crawler_run(config, stats)` clears `stats` when supplied, validates both pointers, the start URL, the domain flag, and positive timeout. Valid configurations currently return `CRAWLER_NOT_IMPLEMENTED`; the function does not access the network. `crawler_status_string` returns a static message that must not be freed.
 
-## Configuration
+`CrawlerConfig` and `CrawlerStats` are caller-owned. `start_url` is borrowed during the call. Statistics fields are initialized to zero for valid and invalid calls whenever `stats` is non-NULL.
 
-`CrawlerConfig` fields:
+The Part 2 URL API is in `include/url.h`:
 
-- `start_url`: required non-empty string, borrowed for the duration of `crawler_run`.
-- `max_depth`: maximum planned crawl depth; the root is depth 0.
-- `same_domain`: must be 0 (allow other domains) or 1 (restrict to the starting host).
-- `timeout_seconds`: must be greater than zero.
+- `url_parse(input, result)`: fills a `ParsedUrl` on success; components are allocated and owned by the caller.
+- `url_free(url)`: releases all parsed components and clears the pointers.
+- `url_normalize(input, output)`: returns a heap-allocated canonical URL through `output`; caller uses `free`.
+- `url_resolve(base, relative, output)`: returns an allocated absolute URL; caller uses `free`.
 
-## Statistics
-
-`CrawlerStats` is caller-owned. It contains pages visited, pages failed, links discovered, maximum depth reached, and bytes downloaded. The function sets every field to zero whenever the pointer is non-NULL, even when argument validation fails.
-
-## Functions and statuses
-
-`CrawlerStatus crawler_run(const CrawlerConfig *config, CrawlerStats *stats)`
-
-Both pointers must be non-NULL. The URL must be non-NULL and non-empty. The domain flag and timeout must be in range. Invalid inputs return `CRAWLER_INVALID_ARGUMENT`. Valid configurations currently return `CRAWLER_NOT_IMPLEMENTED`; no network or parsing work is claimed.
-
-`const char *crawler_status_string(CrawlerStatus status)`
-
-Returns a static, readable message for each status. The caller must not modify or free the returned string. Unknown enum values return `unknown error`.
-
-Defined statuses: `CRAWLER_OK`, `CRAWLER_INVALID_ARGUMENT`, `CRAWLER_OUT_OF_MEMORY`, `CRAWLER_NETWORK_ERROR`, `CRAWLER_PARSE_ERROR`, and `CRAWLER_NOT_IMPLEMENTED`.
+URL functions return 0 for success and -1 for invalid input or allocation failure. The implementation supports HTTP/HTTPS ASCII DNS hostnames and common URL reference forms. IPv6 literals and complete RFC 3986 edge behavior are outside the current scope.

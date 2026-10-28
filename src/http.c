@@ -1,3 +1,2 @@
-/* HTTP downloader: implement response-body collection, status checks,
- * timeout handling, redirects, and downloaded-byte accounting here. */
+/* HTTP downloader module is reserved for Part 3. */
 typedef int crawler_http_module_placeholder;

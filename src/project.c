@@ -13,7 +13,6 @@ const char *crawler_status_string(CrawlerStatus status)
     }
 }
 
-/* TODO: integrate URL, HTTP, HTML, queue and visited-set modules. */
 CrawlerStatus crawler_run(const CrawlerConfig *config, CrawlerStats *stats)
 {
     if (stats != NULL) {

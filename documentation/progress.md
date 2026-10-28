@@ -1,26 +1,25 @@
-# Project progress
+﻿# Project progress
 
-## Completed: Part 1 foundation
+## Part 1 — Complete
 
-- Reusable static-library layout and separate demo.
-- Public config, stats, status/error codes, and API declarations.
-- Argument validation and safe zero-initialization of output statistics.
-- Windows MSYS2 UCRT64 GCC/Make workspace configuration.
-- Make targets for build, test, and clean.
-- Foundational API tests and Part 1 documentation.
-- Git ignore rules for generated build output.
+- Modular C11 project and reusable static library build.
+- Public crawler API, status codes, configuration and statistics structures.
+- Argument validation, zero-initialized output statistics, and status messages.
+- Separate demonstration CLI, Windows MSYS2 Make support, and foundational tests.
 
-## Pending
+## Part 2 — Complete, subject to ongoing verification
 
-- Part 2: URL parsing, validation, normalization, and relative URL resolution.
-- Part 3: HTTP downloader.
-- Part 4: HTML parser and extraction API.
-- Part 5: crawl queue, visited set, depth/domain filtering, and crawl engine.
-- Part 6: working crawl CLI output and statistics.
-- Part 7: broader failure, boundary, and memory tests; complete documentation and contribution details.
+- URL parsing into scheme, hostname, port, path, query and fragment.
+- Validation of empty and oversized inputs, supported schemes, hostname syntax, characters and port range.
+- Canonical normalization and common relative URL resolution.
+- Parsed URL ownership/cleanup and URL unit tests.
 
-Files `src/url.c`, `src/http.c`, `src/html.c`, `src/queue.c`, and `src/visited.c` are placeholders. No crawling feature is represented as complete yet.
+## Parts not implemented in this working branch
 
-## Next step
+- Part 3: HTTP downloading.
+- Part 4: HTML parsing, scraping and link extraction.
+- Part 5: crawl queue and visited URL tracking.
+- Part 6: BFS crawler integration and live crawl statistics.
+- Part 7: integrated network testing and final system validation. Foundational and URL tests exist.
 
-Part 1 establishes the API and build foundation. Part 2 URL handling can begin against this public interface.
+The source modules for Parts 3–5 remain placeholders for teammates. The CLI reports that crawling is not implemented for a valid configuration. Concurrent crawling is an optional extension and has not been started.

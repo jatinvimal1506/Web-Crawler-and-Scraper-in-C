@@ -13,6 +13,10 @@ int url_parse(const char *input, ParsedUrl *result);//Declares our parsing funct
 
 void url_free(ParsedUrl *url);//Declares a function to release memory allocated for the three strings.
 
+/* Returned strings belong to the caller and must be freed with free(). */
+int url_normalize(const char *input, char **output);
+int url_resolve(const char *base, const char *relative, char **output);
+
 
 //One important rule: before passing a ParsedUrl to url_parse(), we'll initialize it to zero. That makes its pointers NULL until the parser assigns them.
 

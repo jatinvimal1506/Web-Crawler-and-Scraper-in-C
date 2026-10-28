@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /*
@@ -142,6 +143,7 @@ static void test_invalid_ports(void)
 
 int main(void)
 {
+    char *normalized = NULL, *resolved = NULL;
     /*
      * TEST GROUP 1: Valid URLs
      */
@@ -202,6 +204,13 @@ int main(void)
      * TEST GROUP 4: Invalid output pointer
      */
     assert(url_parse("https://example.com", NULL) == -1);
+
+    assert(url_normalize("HTTP://Example.COM:80/a/./b/../c?q=1#part", &normalized) == 0);
+    assert(strcmp(normalized, "http://example.com/a/c?q=1") == 0);
+    free(normalized);
+    assert(url_resolve("https://example.com/products/page.html", "../about.html", &resolved) == 0);
+    assert(strcmp(resolved, "https://example.com/about.html") == 0);
+    free(resolved);
 
     printf("All URL validation tests passed.\n");
 

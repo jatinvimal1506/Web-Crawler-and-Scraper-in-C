@@ -1,28 +1,14 @@
-# Testing
+﻿# Testing
 
-## Part 1 automated tests
-
-Run `make test`. The current test program verifies:
-
-- NULL configuration and NULL statistics pointers.
-- NULL and empty starting URLs.
-- Invalid domain flag and non-positive timeout.
-- Valid configuration returns `CRAWLER_NOT_IMPLEMENTED`.
-- Statistics are zeroed on both valid and invalid calls when the output pointer exists.
-- Every defined status and an unknown status value produce readable messages.
-
-## CLI checks
-
-Run `make` first. In PowerShell:
+Run the Part 1 and Part 2 checks from the project folder:
 
 ```powershell
-.\build\crawler-demo.exe https://example.org 2
-.\build\crawler-demo.exe
-.\build\crawler-demo.exe https://example.org nope
+make clean
+make
+make test
+.\build\test-url.exe
 ```
 
-The first command should print a clear not-implemented message and exit successfully. The latter commands should report invalid usage and exit non-zero.
+`test-crawler.c` checks invalid API arguments, statistics initialization, and the not-implemented response for a valid request. `test_url.c` checks parsing, optional URL components, invalid schemes/hosts/ports/characters, long inputs, normalization, and relative resolution.
 
-## Later test coverage
-
-Once the corresponding modules exist, add tests for URLs, HTML, relative and duplicate links, domain/depth boundaries, network failures, large input, and cleanup on allocation failures. Use AddressSanitizer or Valgrind only when available for the selected Windows environment. These later behaviors are not tested or claimed in Part 1.
+HTTP errors, HTML parsing, queue behavior, visited-set behavior, crawl depth/domain rules, and network failures are not tested in this branch because Parts 3–6 are not implemented. Integrated testing remains Part 7 work. Use AddressSanitizer or Valgrind only if available in the selected Windows environment; they have not been run as part of the current verification.
