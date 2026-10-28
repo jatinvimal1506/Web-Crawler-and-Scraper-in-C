@@ -1,455 +1,517 @@
-/* URL parsing, relative-link resolution, and canonical normalization belong here.
- * Keep allocation and ownership rules explicit in the public API. */
+/* URL parsing, canonicalization, and common HTTP reference resolution. */
 #include "url.h"
-#include <stdlib.h>
-#include <string.h>
+
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
+#define URL_MAX_LENGTH 2048
 
-// static:- the function  can only be called from within this file. It is not visible to other files in the project.
-static char*copy_text(const char*start,size_t length){
-    // this helper allocates a new string, copies the text we want. 
-    char *result = malloc(length + 1);
-    if (!result) {
-        return NULL;
+static char *copy_text(const char *start, size_t length)
+{
+    char *copy = malloc(length + 1);
+    if (copy != NULL) {
+        memcpy(copy, start, length);
+        copy[length] = '\0';
     }
-    memcpy(result, start, length);
-    result[length] = '\0';
-    return result;
+    return copy;
 }
-/*
- * Release every dynamically allocated component
- * of a ParsedUrl structure.
- */
+
+/* Host labels follow the ASCII DNS hostname limits used by this project. */
+static int valid_host(const char *host, size_t length)
+{
+    size_t label_length = 0;
+    size_t i;
+
+    if (length == 0 || length > 253) {
+        return 0;
+    }
+    for (i = 0; i < length; ++i) {
+        unsigned char c = (unsigned char)host[i];
+        int letter = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+        int digit = c >= '0' && c <= '9';
+
+        if (c == '.') {
+            if (label_length == 0 || host[i - 1] == '-') {
+                return 0;
+            }
+            label_length = 0;
+        } else {
+            if (!letter && !digit && c != '-') {
+                return 0;
+            }
+            if ((label_length == 0 && c == '-') || label_length == 63) {
+                return 0;
+            }
+            ++label_length;
+        }
+    }
+    return label_length != 0 && host[length - 1] != '-';
+}
+
+static int equal_ascii_case(const char *text, size_t length, const char *word)
+{
+    size_t i;
+    if (strlen(word) != length) {
+        return 0;
+    }
+    for (i = 0; i < length; ++i) {
+        if (tolower((unsigned char)text[i]) != (unsigned char)word[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int hex_digit(unsigned char c)
+{
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+           (c >= 'A' && c <= 'F');
+}
+
+/* Accept URI ASCII characters and require every percent escape to be complete. */
+static int valid_url_characters(const char *text, size_t length)
+{
+    size_t i;
+    for (i = 0; i < length; ++i) {
+        unsigned char c = (unsigned char)text[i];
+        int allowed = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || strchr("-._~:/?#@!$&'()*+,;=%", c) != NULL;
+        if (!allowed) {
+            return 0;
+        }
+        if (c == '%') {
+            if (i + 2 >= length || !hex_digit((unsigned char)text[i + 1]) ||
+                !hex_digit((unsigned char)text[i + 2])) {
+                return 0;
+            }
+            i += 2;
+        }
+    }
+    return 1;
+}
+
+static int field_is_empty(const ParsedUrl *url)
+{
+    return url->scheme == NULL && url->host == NULL && url->port == NULL &&
+           url->path == NULL && url->query == NULL && url->fragment == NULL;
+}
+
 void url_free(ParsedUrl *url)
 {
-    // Check that the structure pointer exists.
     if (url == NULL) {
         return;
     }
-    // Release the six separately allocated strings.
     free(url->scheme);
     free(url->host);
     free(url->port);
     free(url->path);
     free(url->query);
     free(url->fragment);
-    /*
-     * Reset pointers after freeing them.
-     *
-     * This prevents the structure from retaining
-     * dangling pointers to released memory.
-     */
-    url->scheme = NULL;
-    url->host = NULL;
-    url->port = NULL;
-    url->path = NULL;
-    url->query = NULL;
-    url->fragment = NULL;
+    *url = (ParsedUrl){0};
 }
 
-static int is_valid_host(const char*start,size_t length){
-    //a host is valid if it is not empty and does not exceed 253 characters.
-    if(length==0||length>253){
-        return 0; // Invalid length
-    }
-    size_t label_length = 0;
-    for(size_t i=0;i<length;i++){
-        unsigned char c = (unsigned char)start[i];
-        if(c == '.'){
-            if(label_length == 0 || start[i-1]=='-'){
-                return 0; // Invalid label length
-            }
-            label_length = 0; // Reset label length for the next label
-            continue;
-        }
-        int is_letter =(c >= 'a' && c <= 'z') ||(c >= 'A' && c <= 'Z');
-        int is_digit = (c >= '0' && c <= '9');
-        if (!is_letter && !is_digit && c != '-') {
-            return 0;
-        }
-        if(label_length ==0 && c == '-'){
-            return 0;
-        }
-        if(label_length >= 63){
-            return 0; // Invalid label length
-        }
-        label_length++;
-    }
-
-    return label_length > 0 && start[length - 1] != '-'; // Last label must not be empty or end with a hyphen
-}
 /*
- * Parse an absolute HTTP/HTTPS URL into six components.
- *
- * This version supports:
- *   - http and https (lowercase)
- *   - basic ASCII hostnames
- *   - optional numeric ports
- *   - paths
- *   - query strings
- *   - fragments
- *
- * It does not yet implement URL normalization,
- * relative resolution, IPv6, or percent decoding.
+ * Parse one absolute HTTP(S) URL. Build into a temporary structure so that
+ * partial allocation failures can be cleaned without exposing partial output.
  */
-int url_parse(const char *input, ParsedUrl *result)
+UrlStatus url_parse(const char *input, ParsedUrl *result)
 {
-    /*
-     * STEP 1: Validate the input pointers.
-     *
-     * Both input and result must point to
-     * valid objects.
-     */
+    ParsedUrl parsed = {0};
+    const char *scheme_end, *authority, *authority_end, *port_mark = NULL;
+    const char *path_start, *path_end, *query_start = NULL, *query_end = NULL;
+    const char *fragment_start = NULL, *cursor;
+    size_t length, scheme_length, host_length;
+    unsigned long port_number = 0;
+    const char *p;
+    UrlStatus status = URL_ERROR_INVALID_FORMAT;
+
     if (input == NULL || result == NULL) {
-        return -1;
+        return URL_ERROR_INVALID_ARGUMENT;
+    }
+    /* Do not silently discard caller-owned pointers from an earlier parse. */
+    if (!field_is_empty(result)) {
+        return URL_ERROR_INVALID_ARGUMENT;
+    }
+    length = strlen(input);
+    if (length == 0) {
+        return URL_ERROR_INVALID_FORMAT;
+    }
+    if (length > URL_MAX_LENGTH) {
+        return URL_ERROR_TOO_LONG;
+    }
+    if (!valid_url_characters(input, length)) {
+        return URL_ERROR_INVALID_FORMAT;
     }
 
-    /*
-     * Start with empty component pointers.
-     *
-     * Important: the caller must not reuse a
-     * populated ParsedUrl without freeing it first.
-     */
-    *result = (ParsedUrl){0};
-    /*
-     * STEP 2: Check URL length.
-     *
-     * 2048 is our project limit, not a
-     * universal maximum URL length.
-     */
-    size_t length = strlen(input);
-    if (length == 0 || length > 2048) {
-        return -1;
+    scheme_end = strstr(input, "://");
+    if (scheme_end == NULL) {
+        const char *colon = strchr(input, ':');
+        return colon != NULL ? URL_ERROR_UNSUPPORTED_SCHEME
+                             : URL_ERROR_INVALID_FORMAT;
     }
-    /*
-     * Reject raw spaces and control characters.
-     */
-    for (size_t i = 0; i < length; i++) {
-        unsigned char c = (unsigned char)input[i];
+    scheme_length = (size_t)(scheme_end - input);
+    if (!equal_ascii_case(input, scheme_length, "http") &&
+        !equal_ascii_case(input, scheme_length, "https")) {
+        return URL_ERROR_UNSUPPORTED_SCHEME;
+    }
 
-        if (c <= 32 || c == 127) {
-            return -1;
-        }
+    authority = scheme_end + 3;
+    authority_end = authority + strcspn(authority, "/?#");
+    if (authority == authority_end) {
+        return URL_ERROR_INVALID_HOST;
     }
-    /*
-     * STEP 3: Find "://", separating scheme
-     * from the authority.
-     */
-    const char *separator = strstr(input, "://");
-    if (separator == NULL) {
-        return -1;
-    }
-    size_t scheme_length =
-        (size_t)(separator - input);
-    // Support lowercase HTTP and HTTPS for now.
-    int is_http =
-        scheme_length == 4 &&
-        tolower((unsigned char)input[0]) == 'h' &&
-        tolower((unsigned char)input[1]) == 't' &&
-        tolower((unsigned char)input[2]) == 't' &&
-        tolower((unsigned char)input[3]) == 'p';
-    int is_https =
-        scheme_length == 5 &&
-        is_http && 0; /* overwritten below for clarity */
-    is_https = scheme_length == 5 &&
-        tolower((unsigned char)input[0]) == 'h' &&
-        tolower((unsigned char)input[1]) == 't' &&
-        tolower((unsigned char)input[2]) == 't' &&
-        tolower((unsigned char)input[3]) == 'p' &&
-        tolower((unsigned char)input[4]) == 's';
-    if (!is_http && !is_https) {
-        return -1;
-    }
-    /*
-     * STEP 4: Locate the authority.
-     *
-     * Example:
-     * https://example.com:8080/products
-     *         ^----------------^
-     *              authority
-     *
-     * Authority ends at '/', '?' or '#'.
-     */
-    const char *authority_start = separator + 3;
-    const char *authority_end =
-        authority_start +
-        strcspn(authority_start, "/?#");
-    if (authority_end == authority_start) {
-        return -1;
-    }
-    /*
-     * STEP 5: Separate hostname and port.
-     *
-     * Search for a colon within the authority.
-     */
-    const char *port_separator = NULL;
-    for (const char *p = authority_start;
-         p < authority_end; p++) {
+    for (p = authority; p < authority_end; ++p) {
         if (*p == ':') {
-            // Multiple colons are unsupported.
-            if (port_separator != NULL) {
-                return -1;
+            if (port_mark != NULL) {
+                return URL_ERROR_INVALID_HOST;
             }
-            port_separator = p;
+            port_mark = p;
         }
     }
-    const char *host_end =
-        port_separator != NULL
-        ? port_separator
-        : authority_end;
-    size_t host_length =
-        (size_t)(host_end - authority_start);
-    /*
-     * Reuse our Part 2.2 hostname validator.
-     */
-    if (!is_valid_host(authority_start,
-                       host_length)) {
-        return -1;
+    host_length = (size_t)((port_mark != NULL ? port_mark : authority_end) - authority);
+    if (!valid_host(authority, host_length)) {
+        return URL_ERROR_INVALID_HOST;
     }
-    /*
-     * STEP 6: Validate an optional port.
-     *
-     * Ports must contain only digits and
-     * have a numeric value from 1 to 65535.
-     */
-    if (port_separator != NULL) {
-
-        const char *port_start = port_separator + 1;
-
-        if (port_start == authority_end) {
-            return -1;  // Empty port
+    if (port_mark != NULL) {
+        p = port_mark + 1;
+        if (p == authority_end) {
+            return URL_ERROR_INVALID_PORT;
         }
-        unsigned long port_number = 0;
-
-        for (const char *p = port_start;
-             p < authority_end; p++) {
-
-            // Every character must be a digit.
+        for (; p < authority_end; ++p) {
             if (*p < '0' || *p > '9') {
-                return -1;
+                return URL_ERROR_INVALID_PORT;
             }
-
-            /*
-             * Convert decimal digits into a number.
-             *
-             * Example:
-             * '8' -> 8
-             * '0' -> 80
-             * '8' -> 808
-             * '0' -> 8080
-             */
-            port_number =
-                port_number * 10 + (unsigned)(*p - '0');
-
-            /*
-             * Reject immediately when too large.
-             * Because we stop above 65535, this
-             * calculation cannot overflow here.
-             */
+            port_number = port_number * 10 + (unsigned)(*p - '0');
             if (port_number > 65535) {
-                return -1;
+                return URL_ERROR_INVALID_PORT;
             }
         }
         if (port_number == 0) {
-            return -1;
+            return URL_ERROR_INVALID_PORT;
         }
     }
-    /*
-     * STEP 7: Identify the path.
-     *
-     * Path ends at '?' or '#'.
-     *
-     * If no path exists, use "/" as the
-     * default path.
-     */
-    const char *path_start = authority_end;
-    const char *path_end = path_start;
 
+    path_start = authority_end;
+    path_end = path_start;
     if (*path_start == '/') {
-        path_end =
-            path_start + strcspn(path_start, "?#");
+        path_end = path_start + strcspn(path_start, "?#");
     }
-
-    /*
-     * STEP 8: Identify the optional query.
-     *
-     * The query begins after '?'
-     * and ends before '#', if present.
-     */
-    const char *query_start = NULL;
-    const char *query_end = NULL;
-
-    const char *cursor = path_end;
-
+    cursor = path_end;
     if (*cursor == '?') {
         query_start = cursor + 1;
-        query_end =
-            query_start + strcspn(query_start, "#");
-
+        query_end = query_start + strcspn(query_start, "#");
         cursor = query_end;
     }
-    /*
-     * STEP 9: Identify the optional fragment.
-     *
-     * Everything after '#' belongs to
-     * the fragment.
-     */
-    const char *fragment_start = NULL;
     if (*cursor == '#') {
         fragment_start = cursor + 1;
     }
-    /*
-     * STEP 10: Allocate separate strings.
-     *
-     * copy_text() was created in Part 2.1.
-     */
-    result->scheme = copy_text(input, scheme_length);
-    if (result->scheme != NULL) {
-        for (size_t i = 0; i < scheme_length; ++i)
-            result->scheme[i] = (char)tolower((unsigned char)result->scheme[i]);
-    }
 
-    result->host = copy_text(authority_start, host_length);
-    if (result->host != NULL) {
-        for (size_t i = 0; i < host_length; ++i)
-            result->host[i] = (char)tolower((unsigned char)result->host[i]);
-    }
+    parsed.scheme = copy_text(input, scheme_length);
+    parsed.host = copy_text(authority, host_length);
+    parsed.port = port_mark != NULL
+        ? copy_text(port_mark + 1, (size_t)(authority_end - port_mark - 1))
+        : NULL;
+    parsed.path = *path_start == '/'
+        ? copy_text(path_start, (size_t)(path_end - path_start))
+        : copy_text("/", 1);
+    parsed.query = query_start != NULL
+        ? copy_text(query_start, (size_t)(query_end - query_start))
+        : NULL;
+    parsed.fragment = fragment_start != NULL
+        ? copy_text(fragment_start, strlen(fragment_start))
+        : NULL;
 
-    // Store the optional port without its colon.
-    if (port_separator != NULL) {
-        result->port = copy_text(
-            port_separator + 1,
-            (size_t)(authority_end - port_separator - 1)
-        );
+    if (parsed.scheme == NULL || parsed.host == NULL || parsed.path == NULL ||
+        (port_mark != NULL && parsed.port == NULL) ||
+        (query_start != NULL && parsed.query == NULL) ||
+        (fragment_start != NULL && parsed.fragment == NULL)) {
+        status = URL_ERROR_OUT_OF_MEMORY;
+        goto fail;
     }
-    // A missing path becomes "/".
-    if (*path_start == '/') {
-        result->path = copy_text(
-            path_start,
-            (size_t)(path_end - path_start)
-        );
-    } else {
-        result->path = copy_text("/", 1);
+    for (p = parsed.scheme; *p != '\0'; ++p) {
+        ((char *)p)[0] = (char)tolower((unsigned char)*p);
     }
-    // Store query without '?'.
-    if (query_start != NULL) {
-        result->query = copy_text(
-            query_start,
-            (size_t)(query_end - query_start)
-        );
+    for (p = parsed.host; *p != '\0'; ++p) {
+        ((char *)p)[0] = (char)tolower((unsigned char)*p);
     }
-    // Store fragment without '#'.
-    if (fragment_start != NULL) {
-        result->fragment =
-            copy_text(fragment_start, strlen(fragment_start));
-    }
-    /*
-     * STEP 11: Check allocation results.
-     *
-     * Required fields cannot be NULL.
-     * Optional fields need allocation only
-     * when present in the original URL.
-     */
-    if (result->scheme == NULL ||
-        result->host == NULL ||
-        result->path == NULL ||
-        (port_separator != NULL && result->port == NULL) ||
-        (query_start != NULL && result->query == NULL) ||
-        (fragment_start != NULL &&
-         result->fragment == NULL)) {
-        // Release allocations made before failure.
-        url_free(result);
-        return -1;
-    }
-    // All components were processed successfully.
-    return 0;
+    *result = parsed;
+    return URL_OK;
+
+fail:
+    url_free(&parsed);
+    return status;
 }
 
-/* Join components while excluding fragments from crawler identity. */
-int url_normalize(const char *input, char **output)
+/* Pop the last output path segment for the RFC-style /../ transformation. */
+static void remove_last_segment(char *output, size_t *length)
 {
-    ParsedUrl u = {0};
-    char *path = NULL;
-    size_t *segments = NULL, count = 0, cap, n, i = 0, outn = 0;
-    char *joined = NULL;
-    int result = -1;
-    if (output == NULL) return -1;
-    *output = NULL;
-    if (url_parse(input, &u) != 0) return -1;
-    if (u.port != NULL && ((strcmp(u.scheme,"http")==0 && strcmp(u.port,"80")==0) ||
-                           (strcmp(u.scheme,"https")==0 && strcmp(u.port,"443")==0))) {
-        free(u.port); u.port = NULL;
+    while (*length > 0 && output[*length - 1] != '/') {
+        --*length;
     }
-    n = strlen(u.path); cap = n + 1;
-    path = malloc(n + 2); segments = malloc((n + 1) * sizeof(*segments));
-    if (!path || !segments) goto done;
-    path[outn++] = '/';
-    while (i < n) {
-        size_t start, len;
-        while (i < n && u.path[i] == '/') ++i;
-        start = i;
-        while (i < n && u.path[i] != '/') ++i;
-        len = i - start;
-        if (len == 0 || (len == 1 && u.path[start] == '.')) continue;
-        if (len == 2 && u.path[start] == '.' && u.path[start+1] == '.') {
-            if (count) outn = segments[--count];
-            continue;
+    if (*length > 0) {
+        --*length;
+    }
+    output[*length] = '\0';
+}
+
+static void remove_prefix(char *input, size_t count)
+{
+    size_t remaining = strlen(input + count);
+    memmove(input, input + count, remaining + 1);
+}
+
+/*
+ * Apply RFC-style dot-segment removal while preserving repeated separators
+ * and trailing slash meaning. The input path is absolute and bounded.
+ */
+static char *normalize_path(const char *path)
+{
+    size_t length = strlen(path);
+    char *input = copy_text(path, length);
+    char *output = malloc(length + 2);
+    size_t out_length = 0;
+
+    if (input == NULL || output == NULL) {
+        free(input);
+        free(output);
+        return NULL;
+    }
+    output[0] = '\0';
+    while (*input != '\0') {
+        size_t segment_length;
+        char *next_slash;
+
+        if (strncmp(input, "../", 3) == 0) {
+            remove_prefix(input, 3);
+        } else if (strncmp(input, "./", 2) == 0) {
+            remove_prefix(input, 2);
+        } else if (strncmp(input, "/./", 3) == 0) {
+            remove_prefix(input, 2);
+        } else if (strcmp(input, "/.") == 0) {
+            input[1] = '\0';
+        } else if (strncmp(input, "/../", 4) == 0) {
+            remove_prefix(input, 3);
+            remove_last_segment(output, &out_length);
+        } else if (strcmp(input, "/..") == 0) {
+            input[1] = '\0';
+            remove_last_segment(output, &out_length);
+        } else if (strcmp(input, ".") == 0 || strcmp(input, "..") == 0) {
+            input[0] = '\0';
+        } else {
+            next_slash = input[0] == '/'
+                ? strchr(input + 1, '/')
+                : strchr(input, '/');
+            segment_length = next_slash != NULL
+                ? (size_t)(next_slash - input)
+                : strlen(input);
+            memcpy(output + out_length, input, segment_length);
+            out_length += segment_length;
+            output[out_length] = '\0';
+            remove_prefix(input, segment_length);
         }
-        segments[count++] = outn;
-        if (outn > 1) path[outn++] = '/';
-        memcpy(path + outn, u.path + start, len); outn += len;
     }
-    if (outn == 0) path[outn++] = '/';
-    path[outn] = '\0';
-    (void)cap;
-    {
-        size_t need = strlen(u.scheme)+3+strlen(u.host)+strlen(path)+1;
-        if (u.port) need += strlen(u.port)+1;
-        if (u.query) need += strlen(u.query)+1;
-        joined = malloc(need);
-        if (!joined) goto done;
-        snprintf(joined, need, "%s://%s%s%s%s%s%s", u.scheme, u.host,
-            u.port ? ":" : "", u.port ? u.port : "", path,
-            u.query ? "?" : "", u.query ? u.query : "");
+    free(input);
+    if (out_length == 0) {
+        output[0] = '/';
+        output[1] = '\0';
     }
-    *output = joined; joined = NULL; result = 0;
-done:
-    free(joined); free(path); free(segments); url_free(&u); return result;
+    return output;
 }
 
-/* Resolve the common HTTP reference forms used by links in HTML pages. */
-int url_resolve(const char *base, const char *relative, char **output)
+static int is_default_port(const ParsedUrl *url)
 {
-    ParsedUrl b = {0};
-    char *candidate = NULL, *authority = NULL, *dir = NULL;
-    size_t need;
-    int rc = -1;
-    if (!output) return -1;
-    *output = NULL;
-    if (!base || !relative || url_parse(base, &b) != 0) return -1;
-    if (strstr(relative, "://") != NULL) return url_normalize(relative, output);
-    need = strlen(b.scheme)+strlen(b.host)+strlen(b.path)+strlen(relative)+strlen(b.port ? b.port : "")+16;
-    candidate = malloc(need); authority = malloc(strlen(b.host)+strlen(b.port ? b.port : "")+2);
-    if (!candidate || !authority) goto done;
-    snprintf(authority, strlen(b.host)+strlen(b.port ? b.port : "")+2, "%s%s%s", b.host, b.port?":":"", b.port?b.port:"");
-    if (relative[0] == '/' && relative[1] == '/') snprintf(candidate, need, "%s:%s", b.scheme, relative);
-    else if (relative[0] == '/') snprintf(candidate, need, "%s://%s%s", b.scheme, authority, relative);
-    else if (relative[0] == '?' || relative[0] == '#') {
-        char *base_path = malloc(strlen(b.path)+1);
-        if (!base_path) goto done;
-        strcpy(base_path, b.path);
-        snprintf(candidate, need, "%s://%s%s%s%s", b.scheme, authority, base_path, relative[0]=='?' ? "" : "", relative);
-        free(base_path);
-    } else {
-        size_t plen = strlen(b.path), cut = plen;
-        while (cut && b.path[cut-1] != '/') --cut;
-        dir = malloc(cut+1); if (!dir) goto done;
-        memcpy(dir, b.path, cut); dir[cut]='\0';
-        snprintf(candidate, need, "%s://%s%s%s", b.scheme, authority, dir, relative);
+    char *end = NULL;
+    unsigned long value;
+    if (url->port == NULL) {
+        return 0;
     }
-    rc = url_normalize(candidate, output);
+    value = strtoul(url->port, &end, 10);
+    return end != url->port && *end == '\0' &&
+        ((strcmp(url->scheme, "http") == 0 && value == 80) ||
+         (strcmp(url->scheme, "https") == 0 && value == 443));
+}
+
+/* Build scheme://authority plus a path/query/optional fragment tail. */
+static UrlStatus build_url(const ParsedUrl *url, const char *tail, char **output)
+{
+    size_t need = strlen(url->scheme) + 3 + strlen(url->host) + strlen(tail) + 1;
+    char *text;
+    if (url->port != NULL && !is_default_port(url)) {
+        need += strlen(url->port) + 1;
+    }
+    text = malloc(need);
+    if (text == NULL) {
+        return URL_ERROR_OUT_OF_MEMORY;
+    }
+    snprintf(text, need, "%s://%s%s%s%s", url->scheme, url->host,
+             (url->port != NULL && !is_default_port(url)) ? ":" : "",
+             (url->port != NULL && !is_default_port(url)) ? url->port : "", tail);
+    *output = text;
+    return URL_OK;
+}
+
+UrlStatus url_normalize(const char *input, char **output)
+{
+    ParsedUrl parsed = {0};
+    char *path = NULL, *tail = NULL;
+    size_t tail_size;
+    UrlStatus status;
+
+    if (output == NULL) {
+        return URL_ERROR_INVALID_ARGUMENT;
+    }
+    *output = NULL;
+    status = url_parse(input, &parsed);
+    if (status != URL_OK) {
+        return status;
+    }
+    path = normalize_path(parsed.path);
+    if (path == NULL) {
+        status = URL_ERROR_OUT_OF_MEMORY;
+        goto done;
+    }
+    tail_size = strlen(path) + (parsed.query != NULL ? strlen(parsed.query) + 1 : 0) + 1;
+    tail = malloc(tail_size);
+    if (tail == NULL) {
+        status = URL_ERROR_OUT_OF_MEMORY;
+        goto done;
+    }
+    snprintf(tail, tail_size, "%s%s%s", path,
+             parsed.query != NULL ? "?" : "",
+             parsed.query != NULL ? parsed.query : "");
+    status = build_url(&parsed, tail, output);
 done:
-    free(dir); free(candidate); free(authority); url_free(&b); return rc;
+    free(path);
+    free(tail);
+    url_free(&parsed);
+    return status;
+}
+
+static int has_scheme(const char *reference)
+{
+    const char *colon = strchr(reference, ':');
+    const char *delimiter = strpbrk(reference, "/?#");
+    return colon != NULL && (delimiter == NULL || colon < delimiter);
+}
+
+UrlStatus url_resolve(const char *base, const char *relative, char **output)
+{
+    ParsedUrl parsed_base = {0};
+    char *tail = NULL, *candidate = NULL, *directory = NULL;
+    const char *reference_path = relative;
+    size_t relative_length, base_path_length, directory_length, tail_size;
+    UrlStatus status;
+
+    if (output == NULL) {
+        return URL_ERROR_INVALID_ARGUMENT;
+    }
+    *output = NULL;
+    if (base == NULL || relative == NULL) {
+        return URL_ERROR_INVALID_ARGUMENT;
+    }
+    relative_length = strlen(relative);
+    if (relative_length > URL_MAX_LENGTH) {
+        return URL_ERROR_TOO_LONG;
+    }
+    status = url_parse(base, &parsed_base);
+    if (status != URL_OK) {
+        return status;
+    }
+
+    if (relative_length == 0) {
+        status = url_normalize(base, output);
+        goto done;
+    }
+    if (has_scheme(relative)) {
+        status = url_normalize(relative, output);
+        goto done;
+    }
+    if (relative[0] == '/' && relative[1] == '/') {
+        size_t size = strlen(parsed_base.scheme) + 1 + relative_length + 1;
+        candidate = malloc(size);
+        if (candidate == NULL) {
+            status = URL_ERROR_OUT_OF_MEMORY;
+            goto done;
+        }
+        snprintf(candidate, size, "%s:%s", parsed_base.scheme, relative);
+        status = url_normalize(candidate, output);
+        goto done;
+    }
+
+    base_path_length = strlen(parsed_base.path);
+    if (relative[0] == '/') {
+        reference_path = relative;
+        directory_length = 0;
+        directory = copy_text("", 0);
+    } else if (relative[0] == '?' || relative[0] == '#') {
+        directory_length = base_path_length;
+        directory = copy_text(parsed_base.path, directory_length);
+    } else {
+        const char *last_slash = strrchr(parsed_base.path, '/');
+        directory_length = last_slash != NULL
+            ? (size_t)(last_slash - parsed_base.path + 1)
+            : 1;
+        directory = copy_text(parsed_base.path, directory_length);
+    }
+    if (directory == NULL) {
+        status = URL_ERROR_OUT_OF_MEMORY;
+        goto done;
+    }
+
+    tail_size = directory_length + relative_length +
+        ((relative[0] == '#' && parsed_base.query != NULL)
+             ? strlen(parsed_base.query) + 1 : 0) + 2;
+    tail = malloc(tail_size);
+    if (tail == NULL) {
+        status = URL_ERROR_OUT_OF_MEMORY;
+        goto done;
+    }
+    if (relative[0] == '#') {
+        snprintf(tail, tail_size, "%s%s%s%s", directory,
+                 parsed_base.query != NULL ? "?" : "",
+                 parsed_base.query != NULL ? parsed_base.query : "", relative);
+    } else if (relative[0] == '?' || relative[0] == '/') {
+        snprintf(tail, tail_size, "%s", reference_path);
+        if (relative[0] == '?') {
+            size_t path_and_query = directory_length + relative_length + 1;
+            char *combined = malloc(path_and_query);
+            if (combined == NULL) {
+                status = URL_ERROR_OUT_OF_MEMORY;
+                goto done;
+            }
+            snprintf(combined, path_and_query, "%s%s", directory, relative);
+            free(tail);
+            tail = combined;
+            tail_size = path_and_query;
+        }
+    } else {
+        snprintf(tail, tail_size, "%s%s", directory, relative);
+    }
+    status = build_url(&parsed_base, tail, &candidate);
+    if (status == URL_OK) {
+        status = url_normalize(candidate, output);
+    }
+done:
+    free(tail);
+    free(candidate);
+    free(directory);
+    url_free(&parsed_base);
+    return status;
+}
+
+const char *url_status_message(UrlStatus status)
+{
+    switch (status) {
+    case URL_OK: return "success";
+    case URL_ERROR_INVALID_ARGUMENT: return "invalid argument";
+    case URL_ERROR_INVALID_FORMAT: return "invalid URL format";
+    case URL_ERROR_UNSUPPORTED_SCHEME: return "unsupported URL scheme";
+    case URL_ERROR_INVALID_HOST: return "invalid hostname";
+    case URL_ERROR_INVALID_PORT: return "invalid port";
+    case URL_ERROR_TOO_LONG: return "URL exceeds the 2048-byte limit";
+    case URL_ERROR_OUT_OF_MEMORY: return "out of memory";
+    default: return "unknown URL error";
+    }
 }

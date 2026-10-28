@@ -1,23 +1,47 @@
 #ifndef URL_H
 #define URL_H
-//These are header guards. They prevent a header's definitions from being processed more than once in the same compilation unit.
+#include <stddef.h>
+
+/* URL functions return a specific status so callers can report useful errors. */
+typedef enum {
+    URL_OK = 0,
+    URL_ERROR_INVALID_ARGUMENT,
+    URL_ERROR_INVALID_FORMAT,
+    URL_ERROR_UNSUPPORTED_SCHEME,
+    URL_ERROR_INVALID_HOST,
+    URL_ERROR_INVALID_PORT,
+    URL_ERROR_TOO_LONG,
+    URL_ERROR_OUT_OF_MEMORY
+} UrlStatus;
+
 typedef struct {
-    char *scheme;    // Example: "https"
-    char *host;      // Example: "example.com"
-    char *port;      // Example: "8080" (optional)
-    char *path;      // Example: "/products"
-    char *query;     // Example: "id=5" (optional)
-    char *fragment;  // Example: "reviews" (optional)
+    char *scheme;
+    char *host;
+    char *port;
+    char *path;
+    char *query;
+    char *fragment;
 } ParsedUrl;
-int url_parse(const char *input, ParsedUrl *result);//Declares our parsing function. It receives an input URL and a pointer to a structure in which it stores the result.
 
-void url_free(ParsedUrl *url);//Declares a function to release memory allocated for the three strings.
+/*
+ * Parse an absolute HTTP(S) URL. Initialize result as {0} before its first
+ * use. On success it owns allocated components; free them with url_free().
+ * A non-empty result is rejected so existing pointers are never overwritten.
+ */
+UrlStatus url_parse(const char *input, ParsedUrl *result);
 
-/* Returned strings belong to the caller and must be freed with free(). */
-int url_normalize(const char *input, char **output);
-int url_resolve(const char *base, const char *relative, char **output);
+/* Safe for NULL; frees all parsed component strings and clears the structure. */
+void url_free(ParsedUrl *url);
 
+/*
+ * Normalize a supported absolute URL or resolve a URL reference. On success
+ * *output is heap allocated and belongs to the caller (free it). On failure,
+ * *output is NULL whenever output itself is non-NULL.
+ */
+UrlStatus url_normalize(const char *input, char **output);
+UrlStatus url_resolve(const char *base, const char *relative, char **output);
 
-//One important rule: before passing a ParsedUrl to url_parse(), we'll initialize it to zero. That makes its pointers NULL until the parser assigns them.
+/* Return a static status description; do not modify or free it. */
+const char *url_status_message(UrlStatus status);
 
 #endif
