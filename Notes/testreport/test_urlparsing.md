@@ -1,16 +1,16 @@
-﻿# Part 1 and Part 2 URL Test Report
+﻿# Part 1 and Part 2 Test Report
 
 ## 1. Project information
 
 - **Project:** Web Crawler and Scraper in C
-- **Tested modules:** Part 1 API/CLI foundation; Part 2 URL parsing, validation, normalization, resolution, and ownership
-- **Test date:** 2026-10-28 (Asia/Kolkata)
-- **Environment:** Windows PowerShell; MSYS2 UCRT64 GCC 14.1.0; mingw32-make 4.4.1; C11
-- **Scope:** No HTTP, HTML, queue, visited-set, or crawler integration was implemented or tested.
+- **Tested scope:** Part 1 API/CLI foundation and Part 2 URL parsing, validation, normalization, resolution, and ownership
+- **Testing date:** 2026-10-28 (Asia/Kolkata)
+- **Environment:** Windows PowerShell; MSYS2 UCRT64 GCC 14.1.0; mingw32-make 4.4.1; C11; repository at `C:\Manthan\Three muskteers\web-crawler-c`
+- **Source changes:** None. Only this report was added. Additional probes were compiled from temporary C harnesses under `%TEMP%` and were not added to the repository.
 
-## 2. Commands and outcomes
+## 2. Testing overview
 
-Executed from the project directory:
+Executed, in order:
 
 ```powershell
 mingw32-make clean
@@ -19,112 +19,89 @@ mingw32-make test
 .\build\test-url.exe
 ```
 
-All returned exit code 0. The clean C11 build compiled the static library, demo, and test programs using `-Wall -Wextra -Wpedantic` without compiler warnings. `make test` ran `test-crawler.exe` and `test-url.exe`; both passed. The URL executable also passed when run independently.
+All four commands completed with exit code 0. `make test` ran `test-crawler.exe` and `test-url.exe`; the URL executable was also run independently and passed. The build compiled the Part 1/2 library, demo, and tests successfully with `-std=c11 -Wall -Wextra -Wpedantic`.
 
-Two temporary deterministic C harnesses were compiled under `%TEMP%` against the current URL implementation. The first ran 21 named probes, all passed. The second ran four limit/path probes, all passed. Seven CLI probes were repeated: six passed; the FTP CLI case is not applicable because the Part 1 placeholder does not validate URL syntax. The additional scenario probes therefore total 32: **31 PASS, 0 FAIL, 1 N/A**. The permanent URL test program additionally contains the regressions listed below.
+Temporary standalone harnesses compiled against `src/url.c` and `src/project.c` exercised additional edge cases. The first harness ran 21 checks (19 passed, 2 failed). A second harness ran 4 checks (3 passed, 1 failed). Seven CLI argument probes were run (six passed for expected Part 1 behavior; one was not applicable as URL syntax validation is not part of the Part 1 stub). Thus, **32 explicit additional scenario probes** produced 28 pass, 3 fail, and 1 not applicable. Existing test suites passed too; suite invocations are reported separately from scenario counts.
 
-## 3. Detailed supplemental test results
+## 3. Detailed test results
 
-| ID | Category | Input/scenario | Expected | Actual | Result |
+| Test ID | Category | Input / Scenario | Expected Result | Actual Result | Status |
 |---|---|---|---|---|---|
-| N1 | Normal | `http://example.org/path` | HTTP scheme, host and path parsed | Correct components | PASS |
-| N2 | Normal | `HTTPS://Example.COM:443/a?q=1#f` | HTTPS components parsed; scheme/host lowercase | Correct components and optional fields | PASS |
-| B1 | Boundary | Ports 1, 65535, 0, 65536 | 1 and 65535 accepted; others rejected | As expected | PASS |
-| I1 | Invalid | FTP, malformed separators, missing host, invalid host character | Reject invalid/unsupported URL | All rejected | PASS |
-| E1 | Empty | `https://a.test/?` and `https://a.test/#` | Empty query/fragment remain present empty strings | As expected | PASS |
-| E2 | Empty | URL with no explicit path | Path becomes `/` | `/` | PASS |
-| B2 | Boundary | URL lengths 2047, 2048, 2049 | Accept through 2048; reject above | As expected | PASS |
-| B3 | Boundary | DNS hostname lengths 253, 254 | 253 accepted; 254 rejected | As expected | PASS |
-| B4 | Boundary | Label lengths 63, 64 | 63 accepted; 64 rejected | As expected | PASS |
-| N3 | Normal | Mixed case, default port, dot segments, query, fragment | Canonical host/scheme/path; query retained; fragment dropped | `http://example.com/a/c?q=1` | PASS |
-| B5 | Boundary | Resolve `../../../../x` from nested path | Clamp at host root | `https://example.com/x` | PASS |
-| N4 | Normal | Query-only `?q=2` | Keep base path and apply new query | `https://example.com/a/page.html?q=2` | PASS |
-| E3 | Empty/reference | `#part` against `/a/page.html?old=1` | Keep base query; omit fragment identity | `https://example.com/a/page.html?old=1` | PASS |
-| E4 | Empty/reference | Empty relative reference | Base URL, minus fragment | Base path and query retained | PASS |
-| F1 | Failure | Invalid base URL | Specific format error; output NULL | `URL_ERROR_INVALID_FORMAT`; NULL | PASS |
-| F2 | Failure | Malformed absolute reference `http://[bad` | Format error; output NULL | `URL_ERROR_INVALID_FORMAT`; NULL | PASS |
-| F3 | Failure | NULL normalize/resolve output parameter | Invalid-argument status | `URL_ERROR_INVALID_ARGUMENT` | PASS |
-| I2 | Invalid | NULL/empty parse input and NULL result | Appropriate error status, no crash | Invalid-argument/format statuses | PASS |
-| M1 | Memory | NULL cleanup, zeroed cleanup, repeated cleanup | Safe and idempotent for cleared result | No crash | PASS |
-| M2 | Memory | 10,000 parse/free/normalize/relative-resolve iterations | Complete without crash | All iterations completed | PASS |
-| N5 | Normal | Valid Part 1 crawler config | Placeholder status and zero stats | `CRAWLER_NOT_IMPLEMENTED`; stats zeroed | PASS |
-| D1 | Large | 2047-byte URL with a large query | Accept | Accepted | PASS |
-| D2 | Large | 2048-byte URL with a large query | Accept at cap | Accepted | PASS |
-| D3 | Large/failure | 2048-character relative value expands beyond URL limit | Too-long error and NULL output | `URL_ERROR_TOO_LONG`; NULL | PASS |
-| D4 | Normalization | Normalize `https://a.test/a/` | Preserve trailing slash | `https://a.test/a/` | PASS |
-| CLI1 | Invalid CLI | No arguments | Usage error, nonzero exit | Usage; exit 2 | PASS |
-| CLI2 | Empty CLI | Empty start URL argument | Usage/error, nonzero exit | Usage; exit 2 | PASS |
-| CLI3 | Invalid CLI | Depth `abc` | Clear error, nonzero exit | Error; exit 2 | PASS |
-| CLI4 | Invalid CLI | Depth `-1` | Clear error, nonzero exit | Error; exit 2 | PASS |
-| CLI5 | Invalid CLI | Extra argument | Usage error, nonzero exit | Usage; exit 2 | PASS |
-| CLI6 | Normal | `https://example.org 2` | Explain placeholder behavior; exit 0 | Placeholder message; exit 0 | PASS |
-| CLI7 | Scope | `ftp://example.org 1` passed to Part 1 CLI | URL syntax is not validated by Part 1 stub | Placeholder; exit 0; direct URL parser rejects FTP | N/A |
+| N1 | Normal | `http://example.org/path` | HTTP scheme, host, path parsed | Parsed correctly | PASS |
+| N2 | Normal | `HTTPS://Example.COM:443/a?q=1#f` | HTTPS components parsed; scheme and host lowercase | All checked components matched | PASS |
+| B1 | Boundary | Ports 1, 65535, 0, 65536 | Endpoints accepted; out-of-range rejected | 1 and 65535 accepted; 0 and 65536 rejected | PASS |
+| I1 | Invalid | FTP, malformed separators, missing host, hostname with space | Reject unsupported/malformed URL | All rejected | PASS |
+| E1 | Empty | Empty query and empty fragment | Present as allocated empty strings | Both parsed as non-NULL empty strings | PASS |
+| E2 | Empty | URL has no explicit path | Path is `/` | Path was `/` | PASS |
+| B2 | Boundary | Total URL lengths 2047, 2048, 2049 bytes | Accept through documented 2048 limit; reject above | 2047 and 2048 accepted; 2049 rejected | PASS |
+| B3 | Boundary | DNS hostname lengths 253 and 254 | Accept maximum hostname; reject over maximum | 253 accepted; 254 rejected | PASS |
+| B4 | Boundary | Label lengths 63 and 64 | Accept 63; reject 64 | 63 accepted; 64 rejected | PASS |
+| N3 | Normal | Mixed-case host, `:80`, dot segments, query, fragment | Lowercase host/scheme, remove default port and dot segments, keep query, omit fragment | `http://example.com/a/c?q=1` | PASS |
+| B5 | Boundary | Resolve `../../../../x` from a deep path | Collapse beyond-root parents at `/` | Resolved to `https://example.com/x` | PASS |
+| N4 | Normal | Query-only reference `?q=2` | Retain base path and replace query | `https://example.com/a/page.html?q=2` | PASS |
+| E3 | Empty/reference | Resolve `#part` against a base with `?old=1` | Fragment omitted from crawl identity; base query retained | Returned `https://example.com/a/page.html`; query was lost | FAIL |
+| E4 | Empty/reference | Resolve empty relative reference | Return base URL identity | Returned containing directory `https://example.com/a` | FAIL |
+| F1 | Failure | Invalid base URL | Return `-1`, output remains NULL | Returned `-1`; output NULL | PASS |
+| F2 | Failure | Malformed absolute HTTP reference | Return error without crash | Returned error; output NULL | PASS |
+| F3 | Failure | NULL output pointers for normalize/resolve | Return error | Both returned `-1` | PASS |
+| I2 | Invalid | NULL URL, empty URL, NULL parse output | Return error without crash | All returned `-1` | PASS |
+| M1 | Memory | `url_free(NULL)` and free zero-initialized `ParsedUrl` | Safe cleanup | Completed without crash | PASS |
+| M2 | Memory | 10,000 parse/free/normalize/resolve cycles | Complete without crash | All cycles completed | PASS |
+| N5 | Normal | Valid `CrawlerConfig` | Return `CRAWLER_NOT_IMPLEMENTED`; zero stats | Returned placeholder status and zeroed stats | PASS |
+| D1 | Large input | 2047-byte URL with a large query | Accept within limit | Accepted | PASS |
+| D2 | Large input | 2048-byte URL with a large query | Accept at limit | Accepted | PASS |
+| D3 | Large/failure | 2048-character relative reference expands beyond URL limit | Return error and leave output NULL | Failed safely with output NULL | PASS |
+| D4 | Normalization semantics | Normalize `https://a.test/a/` | Preserve trailing slash because it can affect resource identity | Returned `https://a.test/a` | FAIL |
+| CLI1 | Invalid CLI | No arguments | Usage error and nonzero exit | Usage printed; exit 2 | PASS |
+| CLI2 | Empty CLI | Empty start URL argument | Usage/error and nonzero exit | Usage printed; exit 2 | PASS |
+| CLI3 | Invalid CLI | Depth `abc` | Clear depth error; nonzero exit | Error printed; exit 2 | PASS |
+| CLI4 | Invalid CLI | Depth `-1` | Clear depth error; nonzero exit | Error printed; exit 2 | PASS |
+| CLI5 | Invalid CLI | Extra argument | Usage error; nonzero exit | Usage printed; exit 2 | PASS |
+| CLI6 | Normal | `https://example.org 2` | Explain crawler placeholder; successful exit | Placeholder message printed; exit 0 | PASS |
+| CLI7 | Scope check | `ftp://example.org 1` passed to Part 1 CLI | Part 1 stub does not promise URL validation; Part 2 parser should reject FTP | CLI printed placeholder and exited 0; direct URL parser rejects FTP | N/A |
 
-### Permanent URL regression coverage
+The two known resolution failures and trailing-slash normalization behavior were observed directly by the temporary harness. No source or committed tests were changed to correct them, per the task restriction.
 
-The updated `tests/test_url.c` now permanently checks:
+## 4. Test coverage against the seven categories
 
-- Fragment-only resolution retains the base query; empty-reference resolution preserves base path and query.
-- Trailing slash, `/a/.`, `/a/b/..`, `/a/../`, and repeated separators `/a//b/` normalization.
-- Absolute HTTP and HTTPS references, protocol-relative, root-relative, directory-relative, query-only, fragment-only, and deep parent references.
-- 10,000 absolute-reference resolutions to exercise the former early-return leak path.
-- Default-port removal, duplicate-equivalent canonical URLs, valid percent-escape preservation, and malformed percent rejection.
-- Public error status distinctions, status messages, output NULL guarantees, and rejection of a populated parse result without losing its existing pointers.
-- Port, full URL, hostname, DNS label, large-query, and empty-component boundaries.
-
-## 4. Previous failures and fixes
-
-| Previous ID | Original issue and root cause | Code change | Regression input | Expected result | Actual result |
-|---|---|---|---|---|---|
-| E3 | Fragment-only branch assembled from base path but omitted base query. | Resolver now retains the parsed base query when appending a fragment reference; normalization removes the fragment. | Base `https://example.com/a/page.html?old=1#oldfrag`, reference `#part` | `https://example.com/a/page.html?old=1` | PASS |
-| E4 | Empty reference fell into directory-relative handling and returned the containing directory. | Empty reference now normalizes the base itself. | Base `https://example.com/a/page.html?old=1#frag`, reference empty | `https://example.com/a/page.html?old=1` | PASS |
-| D4 | Previous path tokenization discarded trailing slash and repeated separators. | Dot-segment removal now moves path segments while preserving non-dot separators and terminal slash semantics. | `/a/`, `/a/.`, `/a/b/..`, `/a/../`, `/a//b/` | `/a/`, `/a/`, `/a/`, `/`, `/a//b/` | PASS |
-| M3 | Absolute-reference fast path returned immediately after parsing base, skipping cleanup. | The fast path now exits through shared cleanup for the parsed base and intermediates. | Resolve `https://other.test/x` against `https://example.com/base/`, repeated 10,000 times | Correct URL each time; all temporary base allocations released by cleanup path | PASS by regression and source review; leak checker unavailable |
+| Category | Coverage | Assessment |
+|---|---|---|
+| Normal cases | HTTP/HTTPS parsing, components, normalization, common relative resolution, valid crawler placeholder | Adequate for current implemented scope; includes one known normalization semantic issue below |
+| Boundary cases | URL lengths 2047/2048/2049, hostname 253/254, labels 63/64, ports 1/65535/0/65536, deep `../` | Covered for requested limits |
+| Invalid input | NULL/empty pointers, unsupported scheme, malformed separators, missing/invalid host, bad ports, bad references, invalid CLI/config | Covered; allocation-failure injection remains unavailable |
+| Empty input | Empty URL/query/fragment/relative and missing path/CLI arguments | Covered; empty relative reference currently returns the wrong URL |
+| Large input | Limit-sized paths/query and oversized relative input | Covered around the documented URL cap |
+| Failure conditions | Invalid parse, normalize/resolve output pointers, malformed base/reference, CLI arguments | Covered for representative failures; allocation failure is not injectable here |
+| Memory management | Ownership/source review, empty cleanup, 10,000 repeated cycles | Partial. Runtime repetition passed; leak/double-free proof unavailable because sanitizers could not run |
 
 ## 5. Error handling review
 
-The URL API now returns `UrlStatus` consistently:
+**Error handling is not fully implemented for now.**
 
-| Status | Meaning |
-|---|---|
-| `URL_OK` | Success |
-| `URL_ERROR_INVALID_ARGUMENT` | Missing required pointer or already-populated parse output |
-| `URL_ERROR_INVALID_FORMAT` | Malformed URL/reference |
-| `URL_ERROR_UNSUPPORTED_SCHEME` | Scheme other than HTTP/HTTPS |
-| `URL_ERROR_INVALID_HOST` | Missing or invalid ASCII DNS host |
-| `URL_ERROR_INVALID_PORT` | Empty, nonnumeric, zero, or out-of-range port |
-| `URL_ERROR_TOO_LONG` | More than 2048 bytes |
-| `URL_ERROR_OUT_OF_MEMORY` | Allocation failure |
+- `crawler_run` validates NULL pointers, empty start URL, domain flag, and positive timeout. It clears caller statistics before validation and returns `CRAWLER_INVALID_ARGUMENT` or `CRAWLER_NOT_IMPLEMENTED`. It does not parse or validate the URL in this Part 1 placeholder.
+- `url_parse`, `url_normalize`, and `url_resolve` return `0` for success and `-1` for errors. This avoids crashing for the tested invalid inputs, but callers cannot distinguish malformed input from allocation failure.
+- Crawler statuses are documented in `project.h`; URL return codes and ownership have a brief comment in `url.h`, with additional details in `documentation/api.md`.
+- `url_parse` starts by zeroing the output structure. Its source comment requires the caller to pass a zero-initialized or previously freed structure. Calling it on an already populated structure without `url_free` first would lose the old pointers and leak them.
+- The `url_resolve` absolute-reference fast path returns `url_normalize(relative, output)` after parsing and allocating the base components, without freeing the parsed base. This is an evident leak on successful absolute-reference resolution.
+- Invalid base/reference/output cases tested return errors safely. Allocation-failure cleanup is partly visible in source (for example, partial `url_parse` allocations are released), but could not be forced in a runtime test.
+- The CLI reports malformed argument counts and depth syntax with exit code 2. It does not check URL syntax; that is outside the Part 1 stub behavior.
 
-`url_status_message()` maps these statuses to readable static strings. Parse, normalize, and resolve failures return a code; output strings are NULL on failure whenever the output parameter exists. `url_parse` requires a zero-initialized `ParsedUrl` and rejects non-empty output rather than overwriting its allocations. It constructs into a temporary structure and cleans partial component allocations on failure. Part 1 `crawler_run()` retains its own status API and placeholder behavior.
-
-Invalid-input and failure-path checks passed. Allocation failure could not be induced deterministically, so that branch has been reviewed but not forced at runtime.
+The library reports errors rather than exiting or crashing for the exercised invalid inputs, but the undifferentiated URL error code and the identified cleanup/semantic defects mean the assignment’s error-handling requirement is only partially satisfied.
 
 ## 6. Memory-management review
 
-`url_parse` returns individually allocated components owned by the caller; release them with `url_free`. Initialize output as `{0}`. A populated structure is rejected, preserving the existing allocations. `url_free(NULL)` is safe, and `url_free` clears fields after freeing, allowing a second cleanup of that cleared object.
+`url_parse` allocates each component; callers release them with `url_free`. `url_normalize` and `url_resolve` return heap strings that callers release with `free`. The tests follow this ownership rule. `url_free` checks NULL and clears all fields after freeing. Repeated parse/free and returned-output cleanup completed 10,000 cycles without an observed crash.
 
-`url_normalize` and `url_resolve` return heap strings owned by the caller, released with `free`. Both initialize valid output parameters to NULL before work. Source review confirmed the absolute-reference path and common failure exits reach cleanup for parsed base structures and intermediate buffers. Regression loops passed, but they do not prove leak freedom.
+AddressSanitizer was attempted with the installed MSYS2 GCC, but linking failed because the MinGW installation lacks `-lasan` (`ld: cannot find -lasan`). `valgrind` is not installed/on PATH. Allocation-failure injection was not performed. Therefore memory safety and absence of leaks are **not fully verified**; source review found the absolute-reference `url_resolve` leak described above.
 
-AddressSanitizer compilation was attempted; the installed MSYS2 GCC could not link because `-lasan` is missing. Valgrind is unavailable. Allocation-failure injection was not performed. Independent leak freedom is therefore **not proven**.
+## 7. Failed or incomplete tests
 
-## 7. Seven assignment testing categories
+- **Failed:** fragment-only resolution drops the base query.
+- **Failed:** empty relative resolution returns the containing directory rather than the base URL.
+- **Failed:** normalization removes a trailing slash (`/a/` becomes `/a`).
+- **Not tested:** deterministic allocation-failure injection, successful ASan/Valgrind run, fuzzing, or exhaustive URL/RFC conformance.
+- **Not applicable to Part 1:** CLI accepting a supplied FTP URL is consistent with the crawler placeholder not invoking the Part 2 URL parser; direct parser validation rejects FTP.
 
-| Category | Coverage/result |
-|---|---|
-| Normal | HTTP/HTTPS components; normalization; absolute, root, directory, query, fragment, protocol-relative, and empty references; Part 1 placeholder. Passed. |
-| Boundary | Ports, 2048-byte URL limit, hostname and label limits, deep parent traversal. Passed. |
-| Invalid input | NULL, malformed, unsupported scheme, invalid host/port/characters/percent escape and relative values. Passed. |
-| Empty input | Empty URL/query/fragment/reference and missing path/CLI args. Passed. |
-| Large input | Maximum and over-limit URL/query; oversized resolved reference. Passed. |
-| Failure conditions | Typed errors, invalid output/base, malformed absolute reference, NULL outputs, CLI usage errors. Passed. |
-| Memory management | NULL/empty cleanup, populated result protection, 10,000 repeated operations, source path review. Partial: no sanitizer, Valgrind, or forced OOM run. |
+## 8. Final conclusion
 
-## 8. Remaining limits and conclusion
-
-The suite does not test network behavior because Parts 3–6 are placeholders. Allocation-failure injection, fuzzing, ASan, and Valgrind remain unavailable. URL handling is intentionally limited to ASCII DNS names and common HTTP(S) references; IPv6, IDNs, and exhaustive RFC conformance are out of scope.
-
-All four reported defects now have permanent regression coverage and pass. The build and Part 1 tests remain passing. Functional Part 2 verification is successful within the documented scope, but independent leak checking and OOM-path runtime verification remain incomplete.
-
-**Final status: Part 2 Implemented, Verification Incomplete.**
-
+Part 1 passed the available build, API, and CLI checks. Part 2 passed the existing test suite and most additional parser/boundary checks, but the three failed URL behavior probes must be resolved before claiming complete correctness. The APIs report errors safely for the cases exercised, yet error handling is not fully implemented for now because URL errors are not differentiated and static review found a leak in absolute URL resolution. Memory safety has not been fully verified due unavailable sanitizer/leak tools.

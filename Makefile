@@ -7,6 +7,7 @@ LIB := $(BUILD)/libcrawler.a
 SOURCES := src/project.c src/url.c src/http.c src/html.c src/queue.c src/visited.c
 OBJECTS := $(SOURCES:src/%.c=$(BUILD)/%.o)
 DEMO := $(BUILD)/crawler-demo.exe
+PIPELINE_DEMO := $(BUILD)/demo_pipeline.exe
 TEST := $(BUILD)/test-crawler.exe
 URL_TEST := $(BUILD)/test-url.exe
 HTTP_TEST := $(BUILD)/test-http.exe
@@ -16,7 +17,7 @@ SHELL = cmd.exe
 .SHELLFLAGS = /C
 
 .PHONY: all clean test
-all: $(LIB) $(DEMO)
+all: $(LIB) $(DEMO) $(PIPELINE_DEMO)
 
 $(BUILD):
 	if not exist "$(BUILD)" mkdir "$(BUILD)"
@@ -28,6 +29,9 @@ $(LIB): $(OBJECTS)
 	$(AR) rcs $@ $^
 
 $(DEMO): examples/demo.c $(LIB)
+	$(CC) $(CFLAGS) $< $(LIB) $(LDLIBS) -o $@
+
+$(PIPELINE_DEMO): examples/demo_pipeline.c $(LIB)
 	$(CC) $(CFLAGS) $< $(LIB) $(LDLIBS) -o $@
 
 $(TEST): tests/test_crawler.c $(LIB)
@@ -46,4 +50,3 @@ test: $(TEST) $(URL_TEST) $(HTTP_TEST)
 
 clean:
 	if exist "$(BUILD)" rmdir /s /q "$(BUILD)"
-

@@ -32,3 +32,9 @@ Initialize `ParsedUrl` as `{0}` before parsing. `url_parse` only writes the resu
 Normalization lowercases the scheme and host, removes HTTP port 80 and HTTPS port 443 (including leading-zero spellings), ensures an absolute path, removes dot segments, preserves repeated and trailing slash separators, retains query bytes, and removes fragments. Valid percent escapes are preserved byte-for-byte; incomplete or non-hex escapes are rejected. Resolution supports HTTP(S) absolute references, protocol-relative, root-relative, directory-relative, query-only, fragment-only, and empty references. Fragment-only and empty references retain the base query; fragments are removed from crawl identity.
 
 The implementation supports ASCII DNS names only. IPv6 literals, internationalized names, and exhaustive RFC 3986 behavior are outside scope.
+
+## Part 3 HTTP API
+
+`include/http.h` declares `http_download(url, timeout_seconds, response)`, which uses the URL parser to validate an HTTP(S) URL and downloads one HTML response through libcurl. It returns `HTTP_OK` only for a successful 2xx response with HTML content. On success, `HttpResponse` contains the allocated body and its byte size, HTTP status code, final URL, and content type. On failure it returns a specific `HttpStatus`; the response may contain the status code and a detail string when available.
+
+Initialize `HttpResponse` as `{0}` before use. Release response-owned strings with `http_response_free`, and call `http_cleanup` when the process is done with libcurl. HTTP status failures (such as 404) are distinct from transport failures (such as DNS or connection errors). The downloader does not extract HTML or crawl links.
