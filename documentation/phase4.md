@@ -127,6 +127,7 @@ These are `static`: private implementation details, not public library APIs.
 | `name_is` | Compares a bounded input slice with a known name, without allocating. |
 | `tag_end` | Finds `>` outside quotes; detects a new `<` as a malformed-tag recovery point. |
 | `entity_byte` | Converts recognized named/ASCII numeric entities to one byte; bounds numeric arithmetic. |
+| `entity_at` | Reads one bounded entity spelling for both scanner context and decoding, without allocation. |
 | `decode_href` | Allocates a decoded copy of one attribute value; never decodes recursively. |
 | `find_href` | Walks attributes within one tag and returns a borrowed slice of the first `href`. |
 | `append_href` | Trims, resolves and validates a candidate, then grows the owned output array. |
@@ -139,13 +140,16 @@ The main extraction loop skips comments and raw-text elements, recognizes exact
 
 - Single quotes, double quotes, case variations, whitespace around `=`, and
   straightforward unquoted attributes are supported. An unquoted query string
-  may contain `=`, as in `href=/search?q=one`. Whitespace ends the value, so a
+  may contain `=`, as in `href=/search?q=one`. Decimal/hexadecimal question-mark
+  references and `&quest;` work too. The scanner interprets those references
+  for context without treating the `#` inside a numeric spelling as a fragment.
+  Whitespace in the source ends the value, so a
   following `class=...` or duplicate `href=...` cannot be swallowed into it.
   Quotes/backticks inside unquoted values, `=` before the query, stray attribute
   delimiters and missing separators after a preceding quoted attribute are
   conservatively rejected. This is not full browser error recovery.
 - Recognized semicolon-terminated names: `amp`, `AMP`, `quot`, `QUOT`, `apos`,
-  `lt`, `LT`, `gt`, `GT`, `colon`, `sol`, `num`, `Tab` and `NewLine`.
+  `lt`, `LT`, `gt`, `GT`, `colon`, `sol`, `num`, `quest`, `Tab` and `NewLine`.
   Decimal (`&#47;`) and hexadecimal (`&#x2F;`) numeric ASCII entities are
   supported. Unknown names remain literal. Invalid, zero or non-ASCII numeric
   references cause that href to be skipped. Full Unicode/HTML5 decoding is not
@@ -162,8 +166,12 @@ The main extraction loop skips comments and raw-text elements, recognizes exact
 - Duplicates are deliberately preserved in document order. Extraction does not
   implement the future visited/deduplication phase. Duplicate `href` attributes
   on one anchor use the first occurrence, even if it is empty or unsafe.
-- Anchors appearing in comments, other attributes, `script`, `style`, `title`
-  or `textarea` contents are not treated as real links.
+- Anchors appearing in comments, other attributes, `script`, `style`, `title`,
+  `textarea`, `iframe`, `xmp`, `noembed` or `noframes` contents are not treated
+  as real links. `plaintext` consumes the rest, even after a closing spelling.
+  Malformed raw-text closing tags do not prematurely expose fake anchors.
+  `noscript` depends on browser scripting state; this scanner treats it as
+  ordinary markup and does not attempt scripting-dependent HTML5 behavior.
 - Unterminated comments, quoted tags and raw-text blocks consume the remainder
   of the input. This favors not inventing links over browser-style recovery.
 - There is no HTML5 tree building, `<base>` processing, JavaScript execution,
@@ -202,6 +210,7 @@ make test-unit        # existing API/URL tests and new HTML tests, no network
 make test-html        # only the new deterministic HTML suite
 make test-http        # existing HTTP suite, including live network checks
 make test-http-local  # deterministic C-only loopback HTTP fixtures (POSIX)
+make test-http-alloc  # same fixtures plus HTTP metadata OOM regressions (POSIX)
 make test             # both unit and HTTP suites
 make test-html-alloc  # optional GNU-linker allocation-failure test
 ```
@@ -246,6 +255,23 @@ do not claim binary sniffing for falsely labelled `text/html`. The extractor
 still accepts NUL-terminated strings, not arbitrary byte buffers, and has no
 independent 5 MiB input limit. TLS/HTTPS redirect fixtures are not provided;
 the local server is plain HTTP, while the original suite retains live HTTPS.
+
+### Metadata allocation failures
+
+`copy_string` needs heap memory to preserve metadata after curl is cleaned up.
+If either a final-URL copy or a present Content-Type copy fails, a shared
+`metadata_oom` cleanup label frees the body and earlier metadata copies, resets
+owned fields/status/size, and returns `HTTP_ERR_OUT_OF_MEMORY` with a message.
+The label is a single error-cleanup destination, not a loop or a new API.
+An absent Content-Type does not call `copy_string`; it still permits the
+existing HTML-body heuristic. Always free a previous response before reuse.
+
+The HTTP allocation test compiles only a separate test HTTP object with
+allocator names replaced by C test functions. Those functions simulate the
+first/second metadata malloc failure and count HTTP-owned allocations,
+including realloc/calloc of the body. Production library objects remain
+uninstrumented. Tests check cleanup before caller free, repeated free and a
+successful request using the same response afterwards.
 
 The HTML suite checks normal links, duplicates, entities, unsafe schemes,
 false positives, malformed input, empty/invalid arguments, ownership, URL

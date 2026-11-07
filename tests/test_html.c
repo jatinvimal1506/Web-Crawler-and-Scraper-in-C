@@ -113,6 +113,70 @@ static void test_entities(void)
     puts("PASS: entity decoding, encoded schemes and invalid numeric entities");
 }
 
+static void test_encoded_unquoted_queries(void)
+{
+    const char *expected[] = {"https://example.com/search?q=one"};
+    const char *cases[] = {
+        "<a href=/search?q=one>",
+        "<a href=/search&#63;q=one>",
+        "<a href=/search&#x3f;q=one>",
+        "<a href=/search&quest;q=one>",
+        "<a href='/search&#63;q=one'>",
+        "<a href=\"/search&quest;q=one\">",
+        "<A HREF=/search&#x003F;q&#61;one class=link>",
+        "<a href=/search&quest;q=one href=/ignored>"
+    };
+    size_t i;
+    for (i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        expect(cases[i], expected, 1);
+    }
+    {
+        const char *both[] = {"https://example.com/search?q=one&next=two"};
+        expect("<a href=/search&#63;q=one&amp;next=two title=ok>", both, 1);
+    }
+    expect("<a href=javascript&colon;alert(1)&quest;x=one>"
+           "<a href=mailto:a@example.com&#63;subject=one>"
+           "<a href=data:text/plain,x&quest;y=one>"
+           "<a href=/search&#0;q=one>"
+           "<a href=/search&#63q=one>"
+           "<a href=/search&Quest;q=one>"
+           "<a href=/search&amp;quest;q=one>"
+           "<a href=/search&quest;q=one'broken'>"
+           "<a title='x'href=/search&quest;q=one>"
+           "<a href='' href=/search&quest;q=one>", NULL, 0);
+    puts("PASS: literal/encoded query delimiters, boundaries and unsafe schemes");
+}
+
+static void test_raw_text_blocks(void)
+{
+    const char *tags[] = {
+        "script", "style", "title", "textarea", "iframe", "IFRAME",
+        "xmp", "noembed", "noframes"
+    };
+    const char *expected[] = {
+        "https://example.com/before", "https://example.com/after"
+    };
+    char input[512];
+    size_t i;
+    for (i = 0; i < sizeof(tags) / sizeof(tags[0]); ++i) {
+        int length = snprintf(input, sizeof(input),
+            "<a href='/before'><%s title='>'><a href='/fake'>"
+            "</%s><a href='/after'>", tags[i], tags[i]);
+        assert(length > 0 && (size_t)length < sizeof(input));
+        expect(input, expected, 2);
+    }
+    expect("<iframe><a href='/fake'></iframe>", NULL, 0);
+    expect("<a href='/before'><iframe><a href='/fake'>", expected, 1);
+    expect("<a href='/before'><iframe></iframeX><a href='/fake'>", expected, 1);
+    expect("<a href='/before'><iframe></iframe <a href='/fake'>"
+           "</iframe><a href='/after'>", expected, 2);
+    expect("<a href='/before'><plaintext><a href='/fake'>"
+           "</plaintext><a href='/also-fake'>", expected, 1);
+    expect("<iframe>&lt;/iframe&gt;<a href='/fake'></iframe>"
+           "<a href='/after'>", expected + 1, 1);
+    puts("PASS: raw-text exclusions, plaintext and malformed closing tags");
+}
+
 static void test_unsafe(void)
 {
     expect("<a href='javascript:alert(1)'><a href='JaVaScRiPt:alert(1)'>"
@@ -246,7 +310,9 @@ static void test_truncations(void)
 {
     const char *sample =
         "<!-- ignored --><script>'<a href=\"/fake\">'</script>"
-        "<a title='>' href='../x?a=1&amp;b=2'>x</a><a href=/end>";
+        "<iframe><a href='/fake'></iframe>"
+        "<a title='>' href='../x?a=1&amp;b=2'>x</a>"
+        "<a href=/search&#63;q=one><a href=/end>";
     size_t i, length = strlen(sample);
     /* Every possible prefix is its own properly NUL-terminated input buffer.
      * Sanitizers can therefore detect any read past a truncated document. */
@@ -285,6 +351,8 @@ int main(void)
     test_duplicates();
     test_unquoted_queries();
     test_entities();
+    test_encoded_unquoted_queries();
+    test_raw_text_blocks();
     test_unsafe();
     test_false_positives();
     test_malformed();
@@ -293,6 +361,6 @@ int main(void)
     test_boundaries();
     test_truncations();
     test_messages();
-    puts("All HTML tests passed (12 groups).");
+    puts("All HTML tests passed (14 groups).");
     return 0;
 }

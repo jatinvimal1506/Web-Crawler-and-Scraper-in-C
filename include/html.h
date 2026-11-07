@@ -24,11 +24,13 @@ typedef struct {
  *
  * Supports case-insensitive tag/attribute names, single/double-quoted and
  * unquoted values, HTML whitespace, common named and ASCII numeric entities.
- * Unquoted query strings may contain '='; whitespace ends the attribute.
+ * Unquoted query strings may contain '=' after literal or entity-encoded '?'.
+ * Whitespace in the source ends the attribute; references require a semicolon.
  * Invalid/empty hrefs and non-HTTP(S) schemes are skipped. Relative references
  * are resolved by url_resolve(), including its URL limits and normalization
  * rules (notably fragment removal). Duplicates are PRESERVED in source order.
- * Comments and script/style/title/textarea contents are ignored.
+ * Comments and script/style/title/textarea/iframe/xmp/noembed/noframes contents
+ * are ignored; plaintext consumes the rest of the document.
  *
  * Empty HTML is a successful empty result; NULL HTML is an invalid argument.
  * Malformed tags are skipped; an unterminated quote/comment/raw-text block

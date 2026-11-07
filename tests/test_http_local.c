@@ -3,6 +3,68 @@
  * responses; the parent calls the REAL public HTTP and HTML APIs.
  * POSIX fork/sockets are test-only, not new production dependencies.
  */
+#ifndef _WIN32
+#define _POSIX_C_SOURCE 200809L
+#endif
+
+#ifdef HTTP_ALLOC_TEST
+#include <stdlib.h>
+
+/* Only the separately compiled HTTP object uses these replacements. The
+ * installed library, URL module and libcurl itself are not changed/intercepted.
+ * HTTP's malloc calls copy metadata; realloc/calloc own the response body. */
+static size_t metadata_allocations, fail_metadata_at, http_live_allocations;
+void *http_test_malloc(size_t size);
+void *http_test_realloc(void *pointer, size_t size);
+void *http_test_calloc(size_t count, size_t size);
+void http_test_free(void *pointer);
+
+void *http_test_malloc(size_t size)
+{
+    void *pointer;
+    ++metadata_allocations;
+    pointer = metadata_allocations == fail_metadata_at ? NULL : malloc(size);
+    if (pointer != NULL) {
+        ++http_live_allocations;
+    }
+    return pointer;
+}
+
+void *http_test_realloc(void *pointer, size_t size)
+{
+    int was_null = pointer == NULL;
+    void *grown;
+    if (size == 0) {
+        abort(); /* The HTTP body always requests a positive allocation. */
+    }
+    grown = realloc(pointer, size);
+    if (grown != NULL && was_null) {
+        ++http_live_allocations;
+    }
+    return grown;
+}
+
+void *http_test_calloc(size_t count, size_t size)
+{
+    void *pointer = calloc(count, size);
+    if (pointer != NULL) {
+        ++http_live_allocations;
+    }
+    return pointer;
+}
+
+void http_test_free(void *pointer)
+{
+    if (pointer != NULL) {
+        if (http_live_allocations == 0) {
+            abort(); /* A wrong/double free must not pass allocation accounting. */
+        }
+        --http_live_allocations;
+    }
+    free(pointer);
+}
+#endif
+
 #ifdef _WIN32
 #include <stdio.h>
 int main(void)
@@ -12,7 +74,6 @@ int main(void)
     return 0;
 }
 #else
-#define _POSIX_C_SOURCE 200809L
 #include "html.h"
 #include "http.h"
 
@@ -93,6 +154,8 @@ static void serve_response(int fd, const char *path)
         location = "/loop";
     } else if (strcmp(path, "/html") == 0) {
         type = "TeXt/HtMl \t; charset=UTF-8";
+    } else if (strcmp(path, "/html-no-type") == 0) {
+        type = NULL; /* Valid HTML detected by the existing fallback heuristic. */
     } else if (strcmp(path, "/xhtml") == 0) {
         type = "Application/XHTML+XML; charset=UTF-8";
     } else if (strcmp(path, "/fake-type") == 0) {
@@ -252,6 +315,53 @@ static void expect_failure(const char *path, HttpStatus expected)
     CHECK(response.final_url == NULL && response.content_type == NULL);
 }
 
+#ifdef HTTP_ALLOC_TEST
+static void expect_metadata_oom(const char *path, size_t fail_at)
+{
+    HttpResponse response = {0};
+    CHECK(http_live_allocations == 0);
+    metadata_allocations = 0;
+    fail_metadata_at = fail_at;
+    CHECK(download_path(path, &response) == HTTP_ERR_OUT_OF_MEMORY);
+    CHECK(metadata_allocations == fail_at);
+    CHECK(response.body == NULL && response.size == 0);
+    CHECK(response.final_url == NULL && response.content_type == NULL);
+    CHECK(response.status_code == 0 && response.detail[0] != '\0');
+    CHECK(http_live_allocations == 0); /* Cleanup happens inside the failing call. */
+    http_response_free(&response);
+    http_response_free(&response);
+    CHECK(http_live_allocations == 0);
+
+    /* The same structure can immediately be reused for a successful request. */
+    fail_metadata_at = 0;
+    metadata_allocations = 0;
+    CHECK(download_path(path, &response) == HTTP_OK);
+    CHECK(response.body != NULL && response.final_url != NULL);
+    CHECK((response.content_type == NULL) == (strcmp(path, "/html-no-type") == 0));
+    http_response_free(&response);
+    CHECK(http_live_allocations == 0);
+}
+
+static void test_metadata_allocations(void)
+{
+    HttpResponse response = {0};
+    expect_metadata_oom("/html", 1); /* Effective/final URL copy. */
+    expect_metadata_oom("/html", 2); /* Present Content-Type copy, after URL copy. */
+    expect_metadata_oom("/html-no-type", 1); /* URL copy without a header. */
+
+    /* The nonexistent second allocation must not turn an absent header into OOM. */
+    metadata_allocations = 0;
+    fail_metadata_at = 2;
+    CHECK(download_path("/html-no-type", &response) == HTTP_OK);
+    CHECK(metadata_allocations == 1);
+    CHECK(response.final_url != NULL && response.content_type == NULL);
+    http_response_free(&response);
+    CHECK(http_live_allocations == 0);
+    fail_metadata_at = 0;
+    puts("PASS: 3 metadata-copy OOM cases, absent optional header and cleanup/reuse");
+}
+#endif
+
 int main(void)
 {
     HttpResponse response = {0};
@@ -282,6 +392,9 @@ int main(void)
         CHECK(response.body != NULL && response.size > 0);
         http_response_free(&response);
     }
+    CHECK(download_path("/html-no-type", &response) == HTTP_OK);
+    CHECK(response.final_url != NULL && response.content_type == NULL);
+    http_response_free(&response);
     expect_failure("/fake-type", HTTP_ERR_NOT_HTML);
     expect_failure("/fake-xhtml", HTTP_ERR_NOT_HTML);
     expect_failure("/parameter-fake", HTTP_ERR_NOT_HTML);
@@ -303,6 +416,9 @@ int main(void)
     expect_failure("/over-limit", HTTP_ERR_TOO_LARGE);
     expect_failure("/over-limit-stream", HTTP_ERR_TOO_LARGE);
     puts("PASS: exact 5 MiB accepted; +1 byte rejected with/without Content-Length");
+#ifdef HTTP_ALLOC_TEST
+    test_metadata_allocations();
+#endif
     printf("All local HTTP integration tests passed (%u checks).\n", checks);
     return 0;
 }

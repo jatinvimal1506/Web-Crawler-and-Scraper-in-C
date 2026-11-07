@@ -58,7 +58,7 @@ void __wrap_free(void *pointer)
 int main(void)
 {
     const char *input =
-        "<a href=/1?q=one&amp;x=two><a href='/2'><a href='/3'><a href='/4'>"
+        "<a href=/1&#63;q=one&amp;x=two><a href='/2'><a href='/3'><a href='/4'>"
         "<a href='/5'><a href='/6'><a href='/7'><a href='/8'>"
         "<a href='/9'><a href='https://other.test/10'>";
     const char *base = "https://example.com/dir/page.html";

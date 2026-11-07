@@ -14,6 +14,7 @@ cd DeepDownload-C # from the surrounding Replit project; omit if already here
 make
 make test-unit   # deterministic API, URL and HTML tests
 make test-http-local # C-only loopback HTTP fixtures (POSIX; Windows prints SKIP)
+make test-http-alloc # adds deterministic HTTP metadata-copy OOM tests
 make test        # includes local fixtures and original network-dependent tests
 ```
 
@@ -78,3 +79,8 @@ disabling TLS verification. Local C fixtures verify redirect resolution,
 non-HTML rejection and the response size boundary. Public API signatures remain
 unchanged. See `documentation/phase4-test-results.md` for actual results and
 limitations.
+
+Metadata copy failures now return out-of-memory with cleared owned response
+fields instead of a partial success. The HTML scanner excludes iframe and
+other supported raw-text blocks and recognizes entity-encoded question marks
+in unquoted queries. Queue/visited/BFS remain unimplemented.

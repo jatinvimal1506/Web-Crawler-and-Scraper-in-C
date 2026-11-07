@@ -59,7 +59,7 @@ static int entity_byte(const char *p, size_t length, char *byte)
     static const struct { const char *name; char byte; } named[] = {
         {"amp", '&'}, {"AMP", '&'}, {"quot", '"'}, {"QUOT", '"'},
         {"apos", '\''}, {"lt", '<'}, {"LT", '<'}, {"gt", '>'},
-        {"GT", '>'}, {"colon", ':'}, {"sol", '/'}, {"num", '#'},
+        {"GT", '>'}, {"colon", ':'}, {"sol", '/'}, {"num", '#'}, {"quest", '?'},
         {"Tab", '\t'}, {"NewLine", '\n'}
     };
     size_t i;
@@ -105,6 +105,28 @@ static int entity_byte(const char *p, size_t length, char *byte)
     return 0;
 }
 
+/* Inspect one semicolon-terminated reference without allocating. Both the
+ * scanner and decoder use this, so encoded '?'/'#' affect query context once,
+ * not the literal '#' in the spelling of a numeric reference. */
+static int entity_at(const char *start, const char *end, char *byte,
+                     size_t *consumed)
+{
+    const char *p = start + 1;
+    int found;
+    *consumed = 1;
+    while (p < end && *p != ';' && *p != '&' && !html_space(*p)) {
+        ++p;
+    }
+    if (p == end || *p != ';') {
+        return 0;
+    }
+    found = entity_byte(start + 1, (size_t)(p - start - 1), byte);
+    if (found > 0) {
+        *consumed = (size_t)(p - start + 1);
+    }
+    return found;
+}
+
 /* Allocate a decoded href. Each supported entity shrinks, so length+1 is
  * enough. Invalid numeric entities produce an empty href, which is skipped. */
 static char *decode_href(const char *start, size_t length)
@@ -120,25 +142,17 @@ static char *decode_href(const char *start, size_t length)
     }
     while (in < length) {
         if (start[in] == '&') {
-            size_t end = in + 1;
+            size_t consumed;
             char byte;
-            int found;
-            /* Stop at another '&' to avoid swallowing a following entity. */
-            while (end < length && start[end] != ';' && start[end] != '&' &&
-                   !html_space(start[end])) {
-                ++end;
+            int found = entity_at(start + in, start + length, &byte, &consumed);
+            if (found < 0) {
+                decoded[0] = '\0';
+                return decoded;
             }
-            if (end < length && start[end] == ';') {
-                found = entity_byte(start + in + 1, end - in - 1, &byte);
-                if (found < 0) {
-                    decoded[0] = '\0';
-                    return decoded;
-                }
-                if (found > 0) {
-                    decoded[out++] = byte;
-                    in = end + 1;
-                    continue;
-                }
+            if (found > 0) {
+                decoded[out++] = byte;
+                in += consumed;
+                continue;
             }
         }
         decoded[out++] = start[in++];
@@ -209,19 +223,26 @@ static void find_href(const char *p, const char *end,
             int in_query = 0;
             start = p;
             while (p < end && !html_space(*p)) {
+                char syntax = *p;
+                size_t consumed = 1;
                 /* Browsers tolerate '=' in unquoted query strings. Never
                  * treat those bytes as new attributes; whitespace ends value.
                  * Keep other malformed unquoted values conservative. */
-                if (*p == '"' || *p == '\'' || *p == '`' ||
-                    (*p == '=' && !in_query)) {
+                if (*p == '"' || *p == '\'' || *p == '`') {
                     return;
                 }
-                if (*p == '?') {
+                if (*p == '&' && entity_at(p, end, &syntax, &consumed) < 0) {
+                    return;
+                }
+                if (syntax == '=' && !in_query) {
+                    return;
+                }
+                if (syntax == '?') {
                     in_query = 1;
-                } else if (*p == '#') {
+                } else if (syntax == '#') {
                     in_query = 0;
                 }
-                ++p;
+                p += consumed;
             }
             if (is_href) {
                 *value = start;
@@ -342,7 +363,6 @@ HtmlStatus html_extract_links(const char *html, const char *base_url,
             if (!closing || !name_is(name, length, raw_name)) {
                 continue;
             }
-            raw_name = NULL;
         }
         end = tag_end(after_name);
         if (*end == '\0') {
@@ -350,6 +370,12 @@ HtmlStatus html_extract_links(const char *html, const char *base_url,
         }
         if (*end == '<') {
             p = end;
+            continue;
+        }
+        if (raw_name != NULL) {
+            /* A malformed closing tag must not expose raw-text fake anchors. */
+            raw_name = NULL;
+            p = end + 1;
             continue;
         }
         if (!closing && name_is(name, length, "a")) {
@@ -367,9 +393,13 @@ HtmlStatus html_extract_links(const char *html, const char *base_url,
             }
         } else if (!closing) {
             static const char *const raw_tags[] = {
-                "script", "style", "title", "textarea"
+                "script", "style", "title", "textarea", "iframe", "xmp",
+                "noembed", "noframes"
             };
             size_t i;
+            if (name_is(name, length, "plaintext")) {
+                break; /* HTML plaintext never returns to markup, even at </plaintext>. */
+            }
             for (i = 0; i < sizeof(raw_tags) / sizeof(raw_tags[0]); ++i) {
                 if (name_is(name, length, raw_tags[i])) {
                     raw_name = raw_tags[i];

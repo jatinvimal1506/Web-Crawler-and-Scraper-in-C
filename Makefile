@@ -25,9 +25,10 @@ URL_TEST := $(BUILD)/test-url$(EXE)
 HTTP_TEST := $(BUILD)/test-http$(EXE)
 HTML_TEST := $(BUILD)/test-html$(EXE)
 LOCAL_HTTP_TEST := $(BUILD)/test-http-local$(EXE)
+HTTP_ALLOC_TEST := $(BUILD)/test-http-alloc$(EXE)
 HEADERS := $(wildcard include/*.h)
 
-.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local
+.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local test-http-alloc
 all: $(LIB) $(DEMO) $(PIPELINE_DEMO)
 
 $(BUILD):
@@ -64,9 +65,16 @@ $(HTML_TEST): tests/test_html.c $(LIB)
 $(LOCAL_HTTP_TEST): tests/test_http_local.c $(LIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LDLIBS) -o $@
 
+# Test-only allocator replacements. The production HTTP object is unchanged.
+$(BUILD)/http-alloc-test.o: src/http.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) -Dmalloc=http_test_malloc -Drealloc=http_test_realloc -Dcalloc=http_test_calloc -Dfree=http_test_free -c $< -o $@
+
+$(HTTP_ALLOC_TEST): tests/test_http_local.c $(BUILD)/http-alloc-test.o $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) -DHTTP_ALLOC_TEST $< $(BUILD)/http-alloc-test.o $(LIB) $(LDLIBS) -o $@
+
 # Unit tests need no sockets. Local fixtures need loopback, not Internet access.
 # The original HTTP suite still uses public network endpoints.
-test: test-unit test-http-local test-http
+test: test-unit test-http-local test-http-alloc test-http
 
 test-unit: $(TEST) $(URL_TEST) $(HTML_TEST)
 	$(RUN)test-crawler$(EXE)
@@ -78,6 +86,9 @@ test-http: $(HTTP_TEST)
 
 test-http-local: $(LOCAL_HTTP_TEST)
 	$(RUN)test-http-local$(EXE)
+
+test-http-alloc: $(HTTP_ALLOC_TEST)
+	$(RUN)test-http-alloc$(EXE)
 
 test-html: $(HTML_TEST)
 	$(RUN)test-html$(EXE)

@@ -11,24 +11,48 @@ predictions. No native Windows runtime or browser testing is claimed.
 | `make clean` | PASS, exit 0. |
 | `make` | PASS, exit 0: static library and both original CLI demos built. |
 | `timeout 120 make test` | PASS, exit 0: original API/URL tests, HTML tests, local HTTP fixtures and original HTTP suite. |
-| New HTML suite | PASS: all 12 groups, including unquoted query/boundary regressions, truncations and 200-link growth. |
-| New local HTTP suite | PASS: 78 checks against the real public APIs, using C-only loopback fixtures. |
+| New HTML suite | PASS: all 14 groups, including encoded query delimiters, raw-text exclusions, malformed closings, truncations and 200-link growth. |
+| New local HTTP suite | PASS: 81 checks against the real public APIs, using C-only loopback fixtures. |
+| `make test-http-alloc` | PASS: 128 total fixture checks, including 3 injected metadata-copy failures, absent-header success, cleanup and reuse. |
 | Original HTTP suite | PASS: all 7 groups; live example.com HTTPS returned 200 (577 bytes) and the 404 assertion ran. |
 | `make test-html-alloc` | PASS, exit 0: all 143 allocation-failure points; empty output and zero tracked outstanding allocations after each. |
-| Strict compilation, all three new test executables | PASS: C11, `-Wall -Wextra -Wpedantic -Werror`. |
-| ASan + UBSan, HTML suite | PASS with leak detection disabled; 12 groups, no sanitizer diagnostics. |
+| Strict compilation, all four new test executables | PASS: C11, `-Wall -Wextra -Wpedantic -Werror`. |
+| ASan + UBSan, HTML suite | PASS with leak detection disabled; 14 groups, no sanitizer diagnostics. |
 | ASan + UBSan, allocation suite | PASS with leak detection disabled; 143 failure points, no sanitizer diagnostics. |
-| ASan + UBSan, local HTTP suite | PASS with leak detection disabled; 78 checks, no sanitizer diagnostics. |
+| ASan + UBSan, local HTTP suite | PASS with leak detection disabled; 81 checks, no sanitizer diagnostics. |
+| ASan + UBSan, HTTP allocation suite | PASS with leak detection disabled; 128 total checks, no sanitizer diagnostics. |
 | LeakSanitizer | Previously observed unavailable due to ptrace restrictions; not rerun or claimed passing in this correction pass. |
 | Windows Makefile branch | DRY-RUN ONLY: retained cmd.exe, `.exe`, Windows cleanup/mkdir and executable paths. POSIX local fixtures explicitly print SKIP on native Windows. |
 | `git diff --check` | PASS. |
-| Preserved source/API check vs GitHub main | URL/project/queue/visited, original public headers, demos and original tests unchanged. Only the authorized HTTP implementation is corrected. |
+| Preserved source/API check | URL/project/queue/visited, demos and original tests unchanged. HTTP public signatures/enums are unchanged; header comments document metadata OOM cleanup. |
 
-No compiler warnings/errors or assertion/test failures were observed in the
-clean build, full test run or strict sanitizer runs. The original crawler API
+No compiler warnings/errors or unexpected assertion/test failures were observed
+in the clean build, full test run or strict sanitizer runs. Exact commands were:
+`make clean`, `make`, `timeout 120 make test`, `make test-html-alloc`, and
+`make test-http-local test-http-alloc`; all exited 0. The original crawler API
 tests are silent on success. The original HTTP tests can behave differently on
 other machines because they use real network access. Local fixtures need only
 loopback networking, not external services.
+
+## New defect-specific regression evidence
+
+- Failed final-URL metadata allocation: returns `HTTP_ERR_OUT_OF_MEMORY`, with
+  body/final_url/content_type NULL, size/status zero and a nonempty diagnostic.
+- Failed present Content-Type allocation: same consistent OOM state, including
+  freeing the earlier final-URL copy and received body.
+- Failed final-URL allocation with no Content-Type header: same OOM behavior.
+- Missing Content-Type without an allocation failure: valid HTML still succeeds
+  using the existing heuristic, with content_type NULL.
+- HTTP allocation accounting is zero immediately on each injected failure,
+  after repeated free, and after a successful retry using the same structure.
+- As a negative control, the new HTTP OOM regression was also linked against
+  the previous committed HTTP source in a temporary object. It exited 1 at the
+  expected OOM assertion, proving it detects the old false-success bug.
+  This deliberate failure is not a failure of the corrected implementation.
+- Raw-text tests cover iframe/xmp/noembed/noframes as well as the original four
+  exclusions, malformed closing tags and plaintext-to-end behavior.
+- Unquoted decimal/hex/named question marks now match quoted/literal output;
+  adjacent attributes, duplicates and unsafe schemes remain covered.
 
 ## New local HTTP coverage and remaining limits
 
@@ -83,6 +107,17 @@ cc $CFLAGS -std=c11 -Wall -Wextra -Wpedantic -Werror \
   tests/test_http_local.c src/http.c src/html.c src/url.c \
   $LDFLAGS -lcurl -o build/test-http-local-sanitized
 ASAN_OPTIONS=detect_leaks=0 ./build/test-http-local-sanitized
+
+cc $CFLAGS -std=c11 -Wall -Wextra -Wpedantic -Werror \
+  -fsanitize=address,undefined -fno-omit-frame-pointer -g -Iinclude \
+  -Dmalloc=http_test_malloc -Drealloc=http_test_realloc \
+  -Dcalloc=http_test_calloc -Dfree=http_test_free \
+  -c src/http.c -o build/http-alloc-sanitized.o
+cc $CFLAGS -std=c11 -Wall -Wextra -Wpedantic -Werror \
+  -fsanitize=address,undefined -fno-omit-frame-pointer -g -Iinclude \
+  -DHTTP_ALLOC_TEST tests/test_http_local.c build/http-alloc-sanitized.o \
+  src/html.c src/url.c $LDFLAGS -lcurl -o build/test-http-alloc-sanitized
+ASAN_OPTIONS=detect_leaks=0 ./build/test-http-alloc-sanitized
 ```
 
 Leak detection was first attempted with `detect_leaks=1`; it failed at process

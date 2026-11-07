@@ -49,6 +49,9 @@ typedef enum {
  * After failure:  body is NULL and size is 0. status_code, final_url,
  *                 content_type and detail are filled in when known, because
  *                 they help explain the failure.
+ * Metadata-copy OOM: all owned fields are freed, status_code and size are zero,
+ * final_url/content_type/body are NULL, and detail explains the OOM.
+ * A missing Content-Type header is NOT OOM: content_type may remain NULL.
  */
 typedef struct {
     char  *body;          /* the page's HTML (NUL-terminated)                  */

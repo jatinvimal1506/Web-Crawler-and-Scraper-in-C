@@ -32,6 +32,9 @@
 - Targeted unquoted query-string href handling and malformed-attribute regressions.
 - Authorized HTTP safety fixes: exact HTML MIME tokens and HTTP(S)-only redirects.
 - C-only loopback HTTP fixtures for redirects, MIME rejection and response limits.
+- HTTP metadata-copy OOM cleanup and deterministic allocator-failure regressions.
+- Raw-text iframe/xmp/noembed/noframes exclusions and plaintext handling.
+- Entity-aware unquoted query context (`&#63;`, hexadecimal references, `&quest;`).
 - Beginner guide: `documentation/phase4.md`.
 
 ## Parts not implemented in this working branch

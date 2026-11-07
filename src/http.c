@@ -377,6 +377,9 @@ HttpStatus http_download(const char *url, long timeout_seconds,
     curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effective_url);
     if (effective_url != NULL) {
         response->final_url = copy_string(effective_url);
+        if (response->final_url == NULL) {
+            goto metadata_oom;
+        }
     }
 
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response->status_code);
@@ -385,6 +388,9 @@ HttpStatus http_download(const char *url, long timeout_seconds,
     curl_easy_getinfo(curl, CURLINFO_CONTENT_TYPE, &ct);
     if (ct != NULL) {
         response->content_type = copy_string(ct);
+        if (response->content_type == NULL) {
+            goto metadata_oom;
+        }
     }
 
     /* STEP 7: Check transfer outcome and map errors. */
@@ -506,4 +512,14 @@ HttpStatus http_download(const char *url, long timeout_seconds,
 
     curl_easy_cleanup(curl);
     return HTTP_OK;
+
+metadata_oom:
+    /* Nothing from a partially copied response is delivered as success.
+     * buf owns the body until STEP 10; response owns any copied metadata. */
+    free(buf.data);
+    http_response_free(response);
+    curl_easy_cleanup(curl);
+    snprintf(response->detail, sizeof(response->detail),
+             "Out of memory copying HTTP response metadata");
+    return HTTP_ERR_OUT_OF_MEMORY;
 }
