@@ -1,5 +1,9 @@
 # Phase 5: a FIFO queue and a visited URL set
 
+Historical Phase 5 scope/guide. Its statements that integration is future work
+describe that delivery. Phase 6 now integrates these unchanged container APIs;
+see `../prompt history/2026-11-08-phase6-design-decisions.md`.
+
 These are independent C11 library containers, not a running crawler.
 `project.c`, `url.c`, `http.c`, `html.c` and all pre-existing tests are unchanged.
 No network, recursion, document downloader, UI, AI or concurrency is added.

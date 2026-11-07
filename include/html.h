@@ -7,7 +7,8 @@ typedef enum {
     HTML_OK = 0,
     HTML_ERROR_INVALID_ARGUMENT,
     HTML_ERROR_INVALID_BASE_URL,
-    HTML_ERROR_OUT_OF_MEMORY
+    HTML_ERROR_OUT_OF_MEMORY,
+    HTML_ERROR_LIMIT
 } HtmlStatus;
 
 /* Owned array of owned, NUL-terminated absolute HTTP(S) URL strings. */
@@ -42,6 +43,15 @@ typedef struct {
  */
 HtmlStatus html_extract_links(const char *html, const char *base_url,
                               HtmlLinks *result);
+
+/*
+ * Same parser with bounded retained output. If one more valid link would
+ * exceed maximum, return HTML_ERROR_LIMIT and free ALL partial output.
+ * The unlimited original API above is unchanged. Used by the BFS engine so
+ * a 5 MiB page cannot create an unbounded temporary link array.
+ */
+HtmlStatus html_extract_links_limited(const char *html, const char *base_url,
+                                      size_t maximum, HtmlLinks *result);
 
 /* Frees strings, then their array, then resets fields. NULL/repeated calls OK. */
 void html_links_free(HtmlLinks *links);

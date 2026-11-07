@@ -64,11 +64,12 @@ int main(int argc, char **argv)
     config.timeout_seconds = DOWNLOAD_TIMEOUT_SECONDS;
     crawler_status = crawler_run(&config, &stats);
     printf("Status   : %s\n", crawler_status_string(crawler_status));
-    if (crawler_status == CRAWLER_NOT_IMPLEMENTED) {
-        printf("Result   : API accepted configuration (crawl engine integration pending for Phase 6)\n");
-    } else if (crawler_status != CRAWLER_OK) {
-        printf("Result   : API rejected configuration (%s)\n",
+    if (crawler_status != CRAWLER_OK) {
+        printf("Result   : crawl did not fully succeed (%s)\n",
                crawler_status_string(crawler_status));
+    } else {
+        printf("Result   : actual depth-0 crawl completed; %zu page(s) parsed\n",
+               stats.pages_visited);
     }
 
     /* ==========================================================

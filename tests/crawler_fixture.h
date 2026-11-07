@@ -1,0 +1,20 @@
+#ifndef CRAWLER_FIXTURE_H
+#define CRAWLER_FIXTURE_H
+#include <stddef.h>
+enum {
+    FIX_SITE = 1, FIX_A, FIX_B, FIX_G, FIX_EMPTY, FIX_OK, FIX_ERRORS,
+    FIX_MISSING, FIX_BOOM, FIX_PDF, FIX_NUL, FIX_HANG, FIX_REDIRECT,
+    FIX_NEW_PAGE, FIX_NEW_CHILD, FIX_ALIAS, FIX_ALIAS_REVERSE,
+    FIX_OFF_REDIRECT, FIX_OFF_LANDING, FIX_OFF_CHILD, FIX_SCOPE_STRICT,
+    FIX_SCOPE_OPEN, FIX_CANDIDATE_LIMIT, FIX_CANDIDATE_EXACT, FIX_QUEUE_LIMIT,
+    FIX_LEAK, FIX_DROP, FIX_PORT_REDIRECT, FIX_PORT_LANDING,
+    FIX_FAILED_ALIAS, FIX_FAILED_REDIRECT, FIX_NUL_ALIAS, FIX_NUL_REDIRECT
+};
+#define FIX_CHAIN_BASE 1000U
+#define FIX_LOCALHOST_BIT 0x80000000U
+unsigned crawler_fixture_start(void);
+void crawler_fixture_stop(void);
+unsigned crawler_fixture_refused_port(void);
+size_t crawler_fixture_requests(unsigned *records, size_t capacity);
+size_t crawler_fixture_body_size(unsigned route);
+#endif

@@ -39,17 +39,15 @@
 
 ## Parts not implemented in this working branch
 
-- Part 6: BFS crawler integration and live crawl statistics.
 - Part 7: integrated crawl testing and final system validation.
 
-Parts 3–4 are not yet integrated into `crawler_run`, which continues to return
-`CRAWLER_NOT_IMPLEMENTED` for valid configurations. Queue and visited are
-standalone reusable modules, not yet wired into the crawl engine.
+Parts 1–6 are implemented, including bounded BFS through `crawler_run`.
+Queue/visited remain reusable independent modules and are now used by it.
 IPv6, internationalized names and exhaustive RFC 3986 conformance
 remain outside the existing URL module's scope. The optional Phase 4 allocation
 test also exercises failures in the URL resolution allocations it invokes.
 
-## Part 5 — Implemented, standalone only
+## Part 5 — Implemented reusable containers
 
 - Linked FIFO queue with owned URL copies and associated nonnegative depths.
 - Dequeue transfers ownership; repeatable item/container cleanup.
@@ -58,5 +56,20 @@ test also exercises failures in the URL resolution allocations it invokes.
 - Deterministic C tests: 1200 elements, boundaries, ownership, failure rollback.
 - Test-only allocator objects do not enter the production static library.
 - Student guide: `phase5.md`; full order/history/evidence: `../prompt history/`.
-- Original Phases 1–4 source/APIs/tests preserved. No HTTP/HTML edits.
-- Phase 6 and later DeepDownload enhancements still require explicit approval.
+- As delivered in Phase 5, original Phases 1–4 source/APIs/tests were preserved.
+- Phase 6 was subsequently explicitly approved; its scope/evidence is separate.
+
+## Part 6 — Implemented, bounded single-threaded BFS
+
+- Canonical scheduling, FIFO/depth limits, cycles/duplicates and known aliases.
+- Root failures abort; child failures continue and finish PARTIAL; OOM and
+  invariants abort. LIMIT_REACHED never claims exhaustive success.
+- All stats defined centrally; checked additions, depth INT_MAX guard.
+- Exact seed hostname in same-domain mode; effective port pinned in both.
+- Final redirect scope checked after fetch, NOT network isolation.
+- Bounded HTML extraction extension avoids unlimited temporary URL arrays.
+- C-only loopback/order/stats/error/budget tests and whole-engine fault tests.
+- C CLI plus actual controlled demonstration. Prior modules/tests retained,
+  except the required basic API valid-run assertion now uses a C stub.
+- Complete order, decisions and handoff: `../prompt history/2026-11-08-phase6-*`.
+- NO PHASE 7 STARTED. No document downloader/AI/UI/concurrency/deployment.

@@ -11,6 +11,8 @@ make test-http-local
 make test-http-alloc
 make test-phase5
 make test-phase5-alloc
+make test-crawler-engine
+make test-crawler-alloc
 ```
 
 `make` also builds the pipeline demo. Run `.\build\demo_pipeline.exe` for the default URL or pass a URL argument. The Part 1 test checks invalid arguments, statistics initialization, status messages, and the valid not-implemented response. The URL suite checks normal HTTP/HTTPS parsing, each parsed component, status values, host and port validation, URL-size and DNS label/hostname boundaries, query and fragment handling, normalization, reference resolution, output state on errors, repeated cleanup, and the previously failing resolution/trailing-slash cases.
@@ -44,8 +46,7 @@ Current Linux ASan/UBSan commands and measured results are in
 allocation accounting is not a complete leak scan. There is no comprehensive
 HTML5 parser, fuzzing campaign, or deterministic local TLS fixture.
 
-Standalone Phases 4 and 5 are implemented. BFS (Phase 6) and the integrated
-`crawler_run` engine remain unimplemented.
+Phases 1–6 are implemented, including bounded BFS. No Phase 7 is started.
 
 ## Phase 5 tests
 
@@ -68,3 +69,40 @@ Literal Phase 5 clean-build, regression, sanitizer commands and measured
 results are recorded in `../prompt history/2026-11-07-phase5-handoff.md`.
 Allocation accounting is not a complete process leak scan. Windows runtime
 is NOT VERIFIED. Phase 5 code/tests themselves use only standard C11.
+
+## Phase 6 acceptance tests and controlled demo
+
+`make test-crawler-engine` uses `crawler_fixture.c`: a C-only POSIX loopback
+server with dynamic ports and request-order pipe records. It checks real
+libcurl/HTML/URL/queue/visited integration, BFS depth/order, all five stats,
+failures/aliases/scope/ports and both sides of the resource budgets. No public
+site or proxy is needed. `same_domain=0` tests cross-hostnames only on loopback.
+Known failed final aliases are not retried as queued direct URLs. The reverse
+unknown-alias case explicitly verifies the unavoidable duplicate redirect fetch.
+
+`make test-crawler-alloc` uses separate instrumented project/url/html/queue/
+visited objects and a C in-memory HTTP stub. It fails every allocation position
+in a representative complete three-page crawl; checks queue OOM, visited OOM,
+post-enqueue marking failure, retrying a new crawl after failure, zero tracked
+allocations and synthetic INT_MAX/invariant boundaries. Large-frontier/candidate
+budget cleanup is also accounted. These objects/stubs NEVER enter libcrawler.a.
+
+The basic API test retains invalid-argument/stat-zeroing/status assertions.
+Its old valid-call NOT_IMPLEMENTED expectation is replaced by OK/one empty
+HTML page from the C stub. It stays portable and has no live network dependency.
+All other Phase 1–5 tests remain unchanged.
+
+The two Phase 6 targets are included in `make test`; original live HTTP tests
+remain network-dependent and must be distinguished from local failures/skips.
+Local engine fixtures/launcher print SKIP on native Windows; the in-memory
+allocation/API fixtures themselves are standard C11.
+
+```sh
+make build/crawler-fixture
+./build/crawler-fixture --demo
+```
+
+This starts the controlled local site and runs the real BFS CLI. It is not a
+fabricated transcript. See the Phase 6 handoff for exact observed output,
+commands/exits/counts and sanitizer flags. No test-only hooks are in release
+artifacts, no new dependencies are installed, and no UI/browser is involved.

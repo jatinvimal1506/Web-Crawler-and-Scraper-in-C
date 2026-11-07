@@ -2,7 +2,18 @@
 
 ## Part 1 crawler API
 
-`include/project.h` declares `crawler_run(config, stats)`. It clears caller-owned statistics when possible, validates required pointers, start URL non-emptiness, the domain flag, and positive timeout. A valid call currently returns `CRAWLER_NOT_IMPLEMENTED` without networking. `crawler_status_string` returns a static string.
+`include/project.h` declares `crawler_run(config, stats)`. It zeroes available
+caller-owned statistics and validates config/start URL before doing network
+work. Phase 6 performs real bounded BFS. Existing config/stat layouts and enum
+values are preserved; PARTIAL, LIMIT_REACHED and INTERNAL_ERROR are appended.
+`crawler_status_string` returns a static string. No allocated data escapes.
+
+The central stats/error/scope contract is in
+`../prompt history/2026-11-08-phase6-design-decisions.md`.
+HTTP error bodies are not counted. Known final aliases are tracked even when
+the download/parsing fails. Independent queue/visited APIs remain unchanged.
+The original HTML extractor is unchanged in behavior; the additive
+`html_extract_links_limited` provides bounded temporary output for the engine.
 
 ## Part 2 URL API
 

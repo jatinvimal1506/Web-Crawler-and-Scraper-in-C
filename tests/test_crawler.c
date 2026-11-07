@@ -13,8 +13,9 @@ int main(void)
 
     stats = (CrawlerStats){99, 99, 99, 99, 99};
     assert(crawler_run(&config, NULL) == CRAWLER_INVALID_ARGUMENT);
-    assert(crawler_run(&config, &stats) == CRAWLER_NOT_IMPLEMENTED);
-    assert(stats.pages_visited == 0 && stats.pages_failed == 0 &&
+    /* Linked with the deterministic empty-HTML C transport fixture. */
+    assert(crawler_run(&config, &stats) == CRAWLER_OK);
+    assert(stats.pages_visited == 1 && stats.pages_failed == 0 &&
            stats.links_discovered == 0 && stats.max_depth_reached == 0 &&
            stats.bytes_downloaded == 0);
 
@@ -35,6 +36,9 @@ int main(void)
     assert(crawler_status_string(CRAWLER_NETWORK_ERROR)[0] != '\0');
     assert(crawler_status_string(CRAWLER_PARSE_ERROR)[0] != '\0');
     assert(crawler_status_string(CRAWLER_NOT_IMPLEMENTED)[0] != '\0');
+    assert(crawler_status_string(CRAWLER_PARTIAL)[0] != '\0');
+    assert(crawler_status_string(CRAWLER_LIMIT_REACHED)[0] != '\0');
+    assert(crawler_status_string(CRAWLER_INTERNAL_ERROR)[0] != '\0');
     assert(crawler_status_string((CrawlerStatus)999)[0] != '\0');
     return 0;
 }

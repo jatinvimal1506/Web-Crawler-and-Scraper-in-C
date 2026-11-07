@@ -257,7 +257,7 @@ static void find_href(const char *p, const char *end,
  * invalid URLs and unsafe schemes are ordinary skipped links. */
 static HtmlStatus append_href(HtmlLinks *links, size_t *capacity,
                                const char *base, const char *value,
-                               size_t length)
+                               size_t length, size_t maximum)
 {
     char *decoded = decode_href(value, length);
     char *start, *resolved = NULL;
@@ -285,12 +285,19 @@ static HtmlStatus append_href(HtmlLinks *links, size_t *capacity,
         return status == URL_ERROR_OUT_OF_MEMORY
             ? HTML_ERROR_OUT_OF_MEMORY : HTML_OK;
     }
+    if (links->count == maximum) {
+        free(resolved);
+        return HTML_ERROR_LIMIT;
+    }
     if (links->count == *capacity) {
         size_t next = *capacity == 0 ? 8 : *capacity * 2;
         char **grown;
         if (next < *capacity || next > SIZE_MAX / sizeof(*grown)) {
             free(resolved);
             return HTML_ERROR_OUT_OF_MEMORY;
+        }
+        if (next > maximum) {
+            next = maximum;
         }
         /* Use a temporary: failed realloc leaves the original array intact. */
         grown = realloc(links->urls, next * sizeof(*grown));
@@ -320,6 +327,12 @@ void html_links_free(HtmlLinks *links)
 
 HtmlStatus html_extract_links(const char *html, const char *base_url,
                               HtmlLinks *result)
+{
+    return html_extract_links_limited(html, base_url, SIZE_MAX, result);
+}
+
+HtmlStatus html_extract_links_limited(const char *html, const char *base_url,
+                                      size_t maximum, HtmlLinks *result)
 {
     HtmlLinks links = {0};
     ParsedUrl base = {0};
@@ -385,7 +398,7 @@ HtmlStatus html_extract_links(const char *html, const char *base_url,
             find_href(after_name, end, &value, &value_length);
             if (value != NULL) {
                 status = append_href(&links, &capacity, base_url,
-                                     value, value_length);
+                                     value, value_length, maximum);
                 if (status != HTML_OK) {
                     html_links_free(&links);
                     return status;
@@ -420,6 +433,7 @@ const char *html_status_message(HtmlStatus status)
     case HTML_ERROR_INVALID_ARGUMENT: return "invalid argument or nonempty result";
     case HTML_ERROR_INVALID_BASE_URL: return "invalid HTTP(S) base URL";
     case HTML_ERROR_OUT_OF_MEMORY: return "out of memory";
+    case HTML_ERROR_LIMIT: return "link extraction budget reached";
     default: return "unknown HTML error";
     }
 }

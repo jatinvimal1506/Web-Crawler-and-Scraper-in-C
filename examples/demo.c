@@ -1,4 +1,5 @@
 #include "project.h"
+#include "http.h"
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -54,19 +55,11 @@ int main(int argc, char **argv)
     config.timeout_seconds = 15;
 
     status = crawler_run(&config, &stats);
-    if (status == CRAWLER_NOT_IMPLEMENTED) {
-        printf("Project foundation is ready; crawling is not implemented yet.\n");
-        printf("Start URL: %s\nMaximum depth: %zu\n", config.start_url,
-               config.max_depth);
-        return 0;
-    }
-    if (status != CRAWLER_OK) {
-        fprintf(stderr, "Crawl failed: %s\n", crawler_status_string(status));
-        return 1;
-    }
+    printf("Crawl status: %s\n", crawler_status_string(status));
     printf("Pages visited: %zu\nPages failed: %zu\nLinks discovered: %zu\n"
            "Maximum depth: %zu\nBytes downloaded: %zu\n",
            stats.pages_visited, stats.pages_failed, stats.links_discovered,
            stats.max_depth_reached, stats.bytes_downloaded);
-    return 0;
+    http_cleanup();
+    return status == CRAWLER_OK ? 0 : 1;
 }

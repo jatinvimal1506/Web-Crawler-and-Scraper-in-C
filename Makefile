@@ -20,6 +20,8 @@ endif
 
 DEMO := $(BUILD)/crawler-demo$(EXE)
 PIPELINE_DEMO := $(BUILD)/demo_pipeline$(EXE)
+BFS_DEMO := $(BUILD)/crawler-bfs$(EXE)
+CRAWLER_FIXTURE := $(BUILD)/crawler-fixture$(EXE)
 TEST := $(BUILD)/test-crawler$(EXE)
 URL_TEST := $(BUILD)/test-url$(EXE)
 HTTP_TEST := $(BUILD)/test-http$(EXE)
@@ -29,11 +31,13 @@ HTTP_ALLOC_TEST := $(BUILD)/test-http-alloc$(EXE)
 QUEUE_TEST := $(BUILD)/test-queue$(EXE)
 VISITED_TEST := $(BUILD)/test-visited$(EXE)
 PHASE5_ALLOC_TEST := $(BUILD)/test-phase5-alloc$(EXE)
+CRAWLER_ALLOC_TEST := $(BUILD)/test-crawler-alloc$(EXE)
+CRAWLER_ENGINE_TEST := $(BUILD)/test-crawler-engine$(EXE)
 TEST_HEADERS := tests/phase5_check.h
 HEADERS := $(wildcard include/*.h)
 
-.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local test-http-alloc test-phase5 test-phase5-alloc
-all: $(LIB) $(DEMO) $(PIPELINE_DEMO)
+.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local test-http-alloc test-phase5 test-phase5-alloc test-crawler-engine test-crawler-alloc
+all: $(LIB) $(DEMO) $(PIPELINE_DEMO) $(BFS_DEMO)
 
 $(BUILD):
 ifeq ($(OS),Windows_NT)
@@ -54,8 +58,20 @@ $(DEMO): examples/demo.c $(LIB)
 $(PIPELINE_DEMO): examples/demo_pipeline.c $(LIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LDLIBS) -o $@
 
-$(TEST): tests/test_crawler.c $(LIB)
+$(BFS_DEMO): examples/bfs_demo.c $(LIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LDLIBS) -o $@
+
+$(CRAWLER_FIXTURE): tests/crawler_fixture_main.c tests/crawler_fixture.c tests/crawler_fixture.h $(LIB) $(BFS_DEMO)
+	$(CC) $(CFLAGS) $(LDFLAGS) tests/crawler_fixture_main.c tests/crawler_fixture.c $(LIB) $(LDLIBS) -o $@
+
+$(CRAWLER_ENGINE_TEST): tests/test_crawler_engine.c tests/crawler_fixture.c tests/crawler_fixture.h $(TEST_HEADERS) $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) tests/test_crawler_engine.c tests/crawler_fixture.c $(LIB) $(LDLIBS) -o $@
+
+test-crawler-engine: $(CRAWLER_ENGINE_TEST)
+	$(RUN)test-crawler-engine$(EXE)
+
+$(TEST): tests/test_crawler.c tests/crawler_stub.c tests/crawler_stub.h $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) tests/test_crawler.c tests/crawler_stub.c $(LIB) -o $@
 
 $(URL_TEST): tests/test_url.c $(LIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LDLIBS) -o $@
@@ -98,9 +114,28 @@ test-phase5: $(QUEUE_TEST) $(VISITED_TEST)
 test-phase5-alloc: $(PHASE5_ALLOC_TEST)
 	$(RUN)test-phase5-alloc$(EXE)
 
+CRAWLER_ALLOC_NAMES := -Dmalloc=crawler_test_malloc -Drealloc=crawler_test_realloc -Dcalloc=crawler_test_calloc -Dfree=crawler_test_free
+CRAWLER_ENGINE_HOOKS := -Dqueue_enqueue=crawler_test_enqueue -Dvisited_insert=crawler_test_insert -Dqueue_dequeue=crawler_test_dequeue
+CRAWLER_ALLOC_OBJECTS := $(BUILD)/crawl-alloc-project.o $(BUILD)/crawl-alloc-url.o $(BUILD)/crawl-alloc-html.o $(BUILD)/crawl-alloc-queue.o $(BUILD)/crawl-alloc-visited.o $(BUILD)/crawl-alloc-stub.o
+
+$(BUILD)/crawl-alloc-project.o: src/project.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) $(CRAWLER_ALLOC_NAMES) $(CRAWLER_ENGINE_HOOKS) -c $< -o $@
+
+$(BUILD)/crawl-alloc-%.o: src/%.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) $(CRAWLER_ALLOC_NAMES) -c $< -o $@
+
+$(BUILD)/crawl-alloc-stub.o: tests/crawler_stub.c tests/crawler_stub.h $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) $(CRAWLER_ALLOC_NAMES) -c $< -o $@
+
+$(CRAWLER_ALLOC_TEST): tests/test_crawler_alloc.c tests/crawler_stub.h $(TEST_HEADERS) $(CRAWLER_ALLOC_OBJECTS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $< $(CRAWLER_ALLOC_OBJECTS) -o $@
+
+test-crawler-alloc: $(CRAWLER_ALLOC_TEST)
+	$(RUN)test-crawler-alloc$(EXE)
+
 # Unit tests need no sockets. Local fixtures need loopback, not Internet access.
 # The original HTTP suite still uses public network endpoints.
-test: test-unit test-phase5-alloc test-http-local test-http-alloc test-http
+test: test-unit test-phase5-alloc test-crawler-engine test-crawler-alloc test-http-local test-http-alloc test-http
 
 test-unit: $(TEST) $(URL_TEST) $(HTML_TEST) test-phase5
 	$(RUN)test-crawler$(EXE)

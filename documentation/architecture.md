@@ -4,7 +4,8 @@ The project keeps the library and demonstration application separate. The Makefi
 
 ## Implemented modules
 
-- `project.c` / `project.h`: Part 1 public crawler API, input validation, statuses, and statistics initialization. A valid crawl request returns not implemented.
+- `project.c` / `project.h`: public crawler API, validation, statuses/statistics
+  and Phase 6 single-threaded bounded BFS orchestration.
 - `url.c` / `url.h`: Part 2 URL parsing, validation, normalization, relative-reference resolution, and memory cleanup.
 - `http.c` / `http.h`: Part 3 single-page HTTP(S) downloader, using libcurl and the URL parser.
 - `html.c` / `html.h`: standalone Phase 4 anchor extraction, practical entity
@@ -16,13 +17,13 @@ The project keeps the library and demonstration application separate. The Makefi
 
 ## Current integration boundary
 
-`crawler_run` currently validates its configuration and returns
-`CRAWLER_NOT_IMPLEMENTED`; it does not orchestrate the modules. The pipeline
-demo calls `url_parse` and `http_download` directly after demonstrating the
-crawler API. Standalone HTML extraction is implemented and local C integration
-tests combine it with HTTP downloads. Standalone Phase 5 queue/visited modules
-are implemented and tested but are NOT connected to the crawler entry point.
-BFS crawl integration (Phase 6) remains unimplemented.
+`crawler_run` now connects URL, queue, visited, HTTP and HTML modules. A FIFO
+stores canonical URL/depth pairs; scheduled and attempted/known-final sets
+prevent repeated scheduling and skip known queued redirect aliases.
+HTTP/queue/visited APIs and implementations are reused without modification.
+HTML gains a bounded-output entry point while keeping its original API.
+The legacy pipeline still calls standalone URL/HTTP functions in addition to
+its root-only crawler call; use crawler-bfs and the C loopback fixture for BFS.
 
 ## Ownership and failure boundary
 
@@ -37,14 +38,18 @@ Extraction borrows the response body and final URL only for the duration of the
 call. Its output owns independent strings and is freed with `html_links_free`.
 The HTTP/HTML public signatures are unchanged.
 
-## Planned crawl data flow
+## Implemented Phase 6 data flow
 
-Future only: normalize/check key → enqueue URL/depth → mark scheduled in visited
+Normalize/check key → enqueue URL/depth → mark scheduled in visited
 → dequeue/download/extract → resolve/filter children → repeat. FIFO is
 BFS-friendly because new children go behind previously scheduled work.
-The root would have depth zero. Phase 6 must specify limits and failure policy
-before implementation; there is no cross-container atomic transaction.
+The root has depth zero. Fixed budgets and explicit failure statuses are used;
+there is no cross-container atomic transaction or resume/retry mechanism.
 If enqueue fails, do not mark visited. If marking after enqueue fails, stop
 with an explicit error rather than continue with untracked queued work.
-See `phase5.md` for ownership, complexity and failure details.
-No concurrency is included or required by Phase 5.
+The engine aborts on a post-enqueue mark failure and frees both containers.
+Every page owns/frees its HTTP response, extracted links and final-key copy.
+The entry point frees the dequeued item, both sets, remaining queue and seed.
+See `../prompt history/2026-11-08-phase6-design-decisions.md` for the central
+stats/status/alias/port policy, alternatives and honest redirect limitations.
+No concurrency, document downloads or Phase 7 is included.

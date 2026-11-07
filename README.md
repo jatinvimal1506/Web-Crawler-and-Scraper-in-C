@@ -4,7 +4,8 @@ This university project remains a reusable C11 static library with separate CLI
 demonstration programs. Parts 1–3 provide the public crawler API, HTTP(S) URL
 parsing, and single-page HTTP downloading. Phase 4 now provides standalone HTML
 anchor extraction. Phase 5 adds a reusable FIFO URL/depth queue and normalized
-visited-URL set. Recursive crawling is not yet integrated.
+visited-URL set. Phase 6 integrates these modules into a bounded,
+single-threaded BFS crawler; document downloading and Phase 7 are NOT started.
 
 ## Build on Linux / Replit
 
@@ -16,6 +17,8 @@ make
 make test-unit   # deterministic API, URL and HTML tests
 make test-phase5 # offline queue and visited tests
 make test-phase5-alloc # deterministic queue/visited/URL allocation failures
+make test-crawler-engine # deterministic loopback BFS/redirect/scope/stats tests
+make test-crawler-alloc # whole-engine allocation-failure and invariant tests
 make test-http-local # C-only loopback HTTP fixtures (POSIX; Windows prints SKIP)
 make test-http-alloc # adds deterministic HTTP metadata-copy OOM tests
 make test        # includes local fixtures and original network-dependent tests
@@ -46,7 +49,11 @@ Run the combined pipeline with the default URL or supply one:
 
 ## Part 1: public crawler API
 
-`include/project.h` defines the crawler status, configuration, statistics, and `crawler_run` API. `src/project.c` clears statistics and validates configuration values. A valid call returns `CRAWLER_NOT_IMPLEMENTED`; the crawl engine is not integrated.
+`include/project.h` defines the crawler status, configuration, statistics, and
+`crawler_run` API. Phase 6 now performs actual BFS. Invalid calls zero available
+stats and return INVALID_ARGUMENT; root failures are errors; child failures
+continue and finish PARTIAL. LIMIT_REACHED means deliberately incomplete.
+NOT_IMPLEMENTED remains a legacy enum value, not the valid-run behavior.
 
 ## Part 2: URL handling
 
@@ -60,7 +67,7 @@ The pipeline demo calls the Part 1 API, then demonstrates URL parsing and the st
 
 ## Remaining work
 
-Recursive crawling, document downloads,
+Phase 7 final validation/hardening and future document downloads,
 deduplication, provenance and reporting remain future work. See
 `documentation/progress.md` and `documentation/architecture.md`.
 
@@ -86,7 +93,7 @@ limitations.
 Metadata copy failures now return out-of-memory with cleared owned response
 fields instead of a partial success. The HTML scanner excludes iframe and
 other supported raw-text blocks and recognizes entity-encoded question marks
-in unquoted queries. Queue/visited are implemented; BFS remains unimplemented.
+in unquoted queries. Queue/visited and Phase 6 BFS are now implemented.
 
 ## Phase 5: queue and visited URLs
 
@@ -107,10 +114,62 @@ out-of-memory outcomes are separate. Both containers own their allocations;
 Start containers/items with `{0}`; do not shallow-copy populated containers.
 Queue strings are not validated/normalized by the queue itself.
 See [the student guide](documentation/phase5.md) for every function, pointer,
-allocation, error and the future-only Phase 6 scheduling/failure boundary.
-`crawler_run()` still returns `CRAWLER_NOT_IMPLEMENTED` for valid input.
+allocation and error behavior as of Phase 5. Current integration and failure
+contracts are in the Phase 6 documents linked below.
 
 The Markdown-only [prompt history](prompt%20history/2026-11-07-project-history.md)
 contains accessible historical requests, the complete Phase 5 order and the
 acceptance/evidence handoff. No document downloading, AI, GUI or parallelism
 is implemented.
+
+## Phase 6: actual bounded BFS, controlled demonstration
+
+No config fields were added. FIFO depth starts at zero. Only unseen canonical
+HTTP(S) keys are enqueued, then marked scheduled; any failed mark aborts with
+cleanup. A second visited set tracks attempts and learned redirect aliases.
+There are no automatic retries. See
+[design/contracts](prompt%20history/2026-11-08-phase6-design-decisions.md) and
+[acceptance/handoff](prompt%20history/2026-11-08-phase6-handoff.md).
+
+Safety limits: **100 HTTP download attempts, 1000 emitted href candidates,
+1000 scheduled/alias keys**, existing 5 MiB response cap, five redirects per
+download and configured request timeout. Stats count attempts, not every
+redirect hop. Depth also stops before incrementing INT_MAX. CRAWLER_OK means
+the in-scope, depth-bounded queue drained with no failed pages—not that an
+entire website or the Internet was exhaustively crawled.
+
+`same_domain=1` pins the exact canonical seed hostname, not subdomains.
+**Both modes pin the effective seed port**, so removing a nondefault port
+cannot silently select another local service. Mode 0 permits other hosts on
+that port. Redirect final URLs are checked AFTER download: off-scope bodies
+and links are not parsed, but their network fetch may already have occurred.
+This is NOT a network firewall/SSRF defense or automatic robots-policy engine.
+Use only controlled/permissioned sites under their owner's policy; no bypass
+of logins, CAPTCHA, blocks or restrictions is implemented.
+
+All executable demo/fixture code is C:
+
+```sh
+make
+make build/crawler-fixture
+./build/crawler-fixture --demo
+```
+
+That command starts a loopback fixture and actually runs
+`crawler-bfs URL 2 1`. The local graph has two siblings and one grandchild;
+the CLI prints its real status and all five stats. For an interactive fixture,
+run `./build/crawler-fixture`, then in another terminal:
+
+```sh
+./build/crawler-bfs http://127.0.0.1:PRINTED_PORT/site 2 1
+```
+
+Press Enter in the fixture terminal to stop. CLI defaults: depth 1, same-domain
+1, timeout 3 seconds; CLI depth is conservatively restricted to 0..10.
+The original `crawler-demo` and `demo_pipeline` are retained. The legacy
+pipeline also performs a separate standalone download, so it is not an
+exact-once BFS demonstration. The controlled launcher requires POSIX and
+prints SKIP on native Windows; native Windows execution is NOT VERIFIED.
+
+**NO PHASE 7 STARTED.** Further work needs explicit approval and UI-mode
+confirmation; no mode/configuration change or deployment accompanies Phase 6.
