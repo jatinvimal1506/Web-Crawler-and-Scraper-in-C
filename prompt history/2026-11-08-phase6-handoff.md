@@ -54,7 +54,7 @@ PASS refers only to the stated evidence, not unverified platforms/tools.
 | 8d | Windows/MSYS2 cmd/.exe/RUN handling retained; portable C stub/allocation tests. POSIX local fixtures explicitly SKIP on native Windows. | Recipe retained; native Windows build/runtime NOT VERIFIED |
 | 9 | C BFS CLI prints real status/all stats, conservative URL/depth/domain args, actual controlled four-page demonstration; old demos preserved with stale text fixed. | PASS demo exit 0; missing URL exit 2 |
 | 10 | Full accessible instruction + decisions + this requirement/function/QA handoff, existing history retained; current README/architecture/API/progress/testing updated. | PASS |
-| 11 | Only reviewed C-project source/tests/Makefile/Markdown staged; safe remote check, commit, push and independent remote SHA receipt required. | See Git delivery receipt below |
+| 11 | Only 25 reviewed C-project source/tests/Makefile/Markdown files committed; safe non-force push exit 0; independent live remote SHA equals code commit. | PASS source upload; exact receipt below |
 | 12 | Final response must report commit/live SHA, tool limits, UI tier uncertainty, Phase 7 readiness and NO PHASE 7 STARTED; no subsequent feature starts. | Handoff prepared; Git finalization separately verified |
 
 ## What changed (C-only Git payload)
@@ -280,12 +280,33 @@ Origin is the configured Replit GitHub proxy URL for the canonical repository:
 `https://github.replit.internal/jatinvimal1506/Web-Crawler-and-Scraper-in-C.git`.
 No remote replacement, force push, secret read or unrelated scaffold staging.
 
-**Upload finalization pending at initial record creation.** The completed
-code/tests above do not themselves prove a commit or upload. The exact source
-commit, safe push command/exit and independently observed live remote SHA will
-be appended only after actual execution. A necessary docs-only receipt commit
-is explicitly permitted by this Phase 6 order; its final SHA/push is verified
-in the final Replit response rather than a self-referential commit hash.
+### Actual successful source upload
+
+- Source commit: **`c11704e732ce45007abfc6d53ccadb4e65980a16`**.
+- Subject: Implement Phase 6 bounded C11 BFS crawler with deterministic
+  integration and fault tests.
+- Parent remains the verified `e5a99d03353abf79f9d0b3fe4d551d777d2bbae5`;
+  no divergence, merge, reset or history overwrite.
+- `git push --dry-run origin main`: exit **0**, write preflight only.
+- **ONE** actual `git push origin main`: exit **0**, normal NON-FORCE push.
+- Subsequent independent `git ls-remote origin refs/heads/main`: exit **0**,
+  returned **`c11704e732ce45007abfc6d53ccadb4e65980a16`**, exactly matching
+  `git rev-parse HEAD`.
+- C-only checkout status after source push: clean `main...origin/main`,
+  neither ahead nor behind.
+- Payload: 25 reviewed C-project files, 1956 insertions/64 deletions.
+  No outer web scaffold, executable, build/cache output, credential or secret.
+- Commit URL:
+  https://github.com/jatinvimal1506/Web-Crawler-and-Scraper-in-C/commit/c11704e732ce45007abfc6d53ccadb4e65980a16
+
+This successful push proves the current GitHub authentication permitted THIS
+repository upload; it is not a claim about unrelated account permissions.
+
+This receipt update changes only this Markdown file and is explicitly
+authorized by Phase 6 section 11. Its separate normal non-force push must
+check live main still equals the source commit first, and verify remote HEAD
+afterward. The receipt commit cannot literally contain its own hash; its
+latest SHA/upload result is therefore verified in the final Replit response.
 
 ## Remaining limitations and Phase 7 gate
 
