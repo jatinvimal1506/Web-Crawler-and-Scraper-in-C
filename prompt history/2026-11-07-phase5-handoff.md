@@ -1,7 +1,11 @@
 # Phase 5 completion and verifiable handoff
 
-Recorded 2026-11-07. Code/test status: **COMPLETE**. Publication status at this
-document's pre-commit writing: **PENDING**; no future push is claimed as fact.
+Recorded 2026-11-07 UTC; completion is 2026-11-08 in Asia/Calcutta.
+Code/test status: **COMPLETE**. Phase 5 source publication:
+**VERIFIED SUCCESS**. This post-push receipt updates the pre-push report in the
+source commit. The user explicitly approved a docs-only follow-up push:
+"Allow docs-only follow-up push". This report records the verified SOURCE push;
+its own future receipt-commit SHA/outcome is reported separately at delivery.
 The complete order is [here](2026-11-07-phase5-authoritative-instruction.md).
 This report deliberately distinguishes observed results from unverified work.
 
@@ -123,7 +127,7 @@ clear ownership and beginner readability. No fixed small capacity is used.
 | Historical date/verbatim integrity | PASS: original timestamps/unavailable prompts explicitly distinguished from recorded dates/retrospective summaries. |
 | README, architecture, progress, testing and beginner explanations | PASS: updated; complete function/pointer/ownership examples and complexity. |
 | Future Phase 6 explanation, not integration | PASS: scheduling/failure boundary and prerequisites documented below and in guide. |
-| Git review/commit/non-force push/remote comparison | PENDING publication at this pre-commit snapshot; see publication section. No success is invented. |
+| Git review/commit/non-force push/remote comparison | PASS: reviewed 20 C/docs/build files; source commit 9667743 pushed normally, exit 0, live remote SHA equals local HEAD. Separate docs-only receipt upload explicitly approved. |
 | No modes/config changes, paid features, deployment | PASS for actions: none changed/enabled. Active UI billing/model tier NOT VERIFIED; existing expertMode flag untouched. |
 
 ## Literal verification commands and outcomes
@@ -191,20 +195,42 @@ Working source directory: `DeepDownload-C/` in the parent workspace.
 C-only Git checkout: `.local/github-sync/deepdownload-c` (C files at its root).
 Do not push the parent's unrelated checkpoint repository.
 
-At writing, Phase 5 commit/push has not happened; publication is pending, not
-failed or successful. Required process: review the exact allowlisted files,
-ensure no other edits in the C checkout, commit, confirm live remote still
-equals decbbe7, verify write access, then one normal non-force push to `main`.
-Afterward compare `git ls-remote origin refs/heads/main` with local HEAD.
-If the remote changes or permission fails, stop; no force or repeated attempts.
-Earlier Phase 4 403 errors were subsequently resolved for its successful push;
-that is not a promise of current/future permission.
+After all applicable tests, exactly 20 relevant files were reviewed and
+committed. No scaffold, build output, cache or credential was included.
+The C checkout's intended branch/remote were verified; main remained at
+decbbe7 before commit and immediately before the push. No force was used.
+
+Phase 5 implementation commit:
+[9667743d37a487cec9de8f9ccf2a1af186c36616](https://github.com/jatinvimal1506/Web-Crawler-and-Scraper-in-C/commit/9667743d37a487cec9de8f9ccf2a1af186c36616)
+
+```text
+git push --dry-run --porcelain origin HEAD:refs/heads/main
+exit 0
+git push --porcelain origin HEAD:refs/heads/main
+exit 0
+git ls-remote origin refs/heads/main
+9667743d37a487cec9de8f9ccf2a1af186c36616 refs/heads/main
+git rev-parse HEAD
+9667743d37a487cec9de8f9ccf2a1af186c36616
+git branch -vv
+* main 9667743 [origin/main] Implement Phase 5 FIFO queue and normalized visited tracking with C regressions and prompt history
+git status --short
+(empty)
+```
+
+This was one actual normal push; the preceding dry-run did not upload.
+The historical Phase 4 HTTP 403 was NOT the outcome of this Phase 5 push.
+Write access succeeded for this operation, not a promise of future permission.
 
 A committed document cannot know its own SHA or a future push result.
-The user was asked whether a post-verification docs-only receipt commit/push
-is additionally approved. Until approved, the original one-push limit applies.
-The final chat reports the actual new SHA and remote comparison; this
-pre-push report does not fabricate an upload receipt.
+This receipt records the completed SOURCE commit/push above, not its own
+future documentation commit. The user explicitly answered:
+"Allow docs-only follow-up push" (no additional comments).
+One additional normal docs-only push is authorized to preserve this actual
+verification record and approval. The already-pushed source commit contains
+the original pre-push snapshot of this handoff. No C code/test changes are
+needed for the receipt. Delivery reports the receipt commit's own final SHA
+and live remote comparison, avoiding an impossible self-referential commit hash.
 
 ## Phase 6 readiness and exact prerequisites
 

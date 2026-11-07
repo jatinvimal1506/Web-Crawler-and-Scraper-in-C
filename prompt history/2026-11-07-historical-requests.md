@@ -1,6 +1,7 @@
 # Accessible historical user requests
 
-Recorded 2026-11-07, in their available chronological order. Original
+Recorded 2026-11-07 UTC (2026-11-08 in Asia/Calcutta at completion), in their
+available chronological order. Original
 per-message dates/times were not supplied. Text below is transcribed from
 accessible user-message bodies; transport XML is omitted. It is NOT a claim
 to possess unavailable original university-project prompts.
@@ -76,3 +77,21 @@ The complete subsequent Phase 5 instruction is in
 [its own file](2026-11-07-phase5-authoritative-instruction.md), not replaced by
 this history. Prior assistant explanations are summarized in the project
 history and handoff, rather than misrepresented as user instructions.
+
+## 11. Phase 5 authoritative order
+
+The complete text is preserved, without shortening, in
+[the Phase 5 instruction](2026-11-07-phase5-authoritative-instruction.md).
+
+## 12. Additional docs-only push approval
+
+Recorded local date: 2026-11-08, Asia/Calcutta (UTC date 2026-11-07).
+The question was: "May I push a final documentation receipt?"
+
+Exact user answer:
+
+> Allow docs-only follow-up push
+
+No additional comments were provided. This approval is for preserving the
+actual verified Phase 5 upload result in committed Markdown, not for C changes,
+Phase 6, paid features, deployment or mode switches.

@@ -1,6 +1,7 @@
 # DeepDownload-C instruction and decision history
 
-Recorded 2026-11-07. This is a **retrospective summary**, not a verbatim
+Recorded 2026-11-07 UTC (2026-11-08 in Asia/Calcutta at completion).
+This is a **retrospective summary**, not a verbatim
 historical prompt. Exact accessible user requests are in
 [historical requests](2026-11-07-historical-requests.md). Original request
 timestamps and requests before the available conversation are unavailable;
@@ -60,6 +61,15 @@ the date above is the recording date, not an invented date for each event.
    publishes nodes only after allocation succeeds. No combined BFS engine or
    network operations were added. Final evidence belongs to the
    [handoff](2026-11-07-phase5-handoff.md).
+10. **Phase 5 complete and source push verified — same UTC recording date.**
+    Queue/visited tests, 39 injected allocation-failure positions, old
+    regression suites and three new ASan/UBSan suites passed. One authorized
+    normal source push succeeded and live main equaled
+    [9667743](https://github.com/jatinvimal1506/Web-Crawler-and-Scraper-in-C/commit/9667743d37a487cec9de8f9ccf2a1af186c36616).
+    Because actual push verification only exists after the source commit,
+    the user explicitly approved one additional docs-only receipt push.
+    That approval is preserved in the historical requests and handoff.
+    No Phase 6 or mode/configuration change was made.
 
 ## Mode and repository distinctions
 

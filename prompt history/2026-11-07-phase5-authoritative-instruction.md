@@ -1,6 +1,7 @@
 # Phase 5 authoritative instruction — complete user text
 
-Recorded: 2026-11-07. The full accessible user instruction is reproduced below.
+Recorded: 2026-11-07 UTC (2026-11-08 in Asia/Calcutta at completion).
+The full accessible user instruction is reproduced below.
 Transport wrappers (`message_origin` / `user_message`) are not project requirements
 and are omitted. No original per-message time-of-day was supplied.
 
