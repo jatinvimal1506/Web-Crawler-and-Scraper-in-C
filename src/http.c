@@ -85,8 +85,8 @@ static size_t http_write_callback(void *contents, size_t size, size_t nmemb, voi
 }
 
 /*
- * Check whether a Content-Type string indicates HTML.
- * Accepts "text/html" and "application/xhtml+xml" (case-insensitive).
+ * Compare the entire media-type token, not a substring or a parameter value.
+ * HTTP optional whitespace is space/tab; parameters follow the first ';'.
  */
 static int is_html_content_type(const char *ct)
 {
@@ -94,36 +94,34 @@ static int is_html_content_type(const char *ct)
         return 0;
     }
 
-    static const char html_mime[] = "text/html";
-    static const char xhtml_mime[] = "application/xhtml+xml";
-    size_t ct_len = strlen(ct);
-    size_t h_len = sizeof(html_mime) - 1;
-    size_t x_len = sizeof(xhtml_mime) - 1;
-
-    for (size_t i = 0; i < ct_len; i++) {
-        if (i + h_len <= ct_len) {
-            int match = 1;
-            for (size_t j = 0; j < h_len; j++) {
-                if (tolower((unsigned char)ct[i + j]) != html_mime[j]) {
-                    match = 0;
-                    break;
-                }
-            }
-            if (match) {
-                return 1;
+    static const char *const accepted[] = {
+        "text/html", "application/xhtml+xml"
+    };
+    const char *end;
+    size_t length, i;
+    while (*ct == ' ' || *ct == '\t') {
+        ++ct;
+    }
+    end = strchr(ct, ';');
+    if (end == NULL) {
+        end = ct + strlen(ct);
+    }
+    while (end > ct && (end[-1] == ' ' || end[-1] == '\t')) {
+        --end;
+    }
+    length = (size_t)(end - ct);
+    for (i = 0; i < sizeof(accepted) / sizeof(accepted[0]); ++i) {
+        size_t j;
+        if (length != strlen(accepted[i])) {
+            continue;
+        }
+        for (j = 0; j < length; ++j) {
+            if (tolower((unsigned char)ct[j]) != accepted[i][j]) {
+                break;
             }
         }
-        if (i + x_len <= ct_len) {
-            int match = 1;
-            for (size_t j = 0; j < x_len; j++) {
-                if (tolower((unsigned char)ct[i + j]) != xhtml_mime[j]) {
-                    match = 0;
-                    break;
-                }
-            }
-            if (match) {
-                return 1;
-            }
+        if (j == length) {
+            return 1;
         }
     }
     return 0;
@@ -332,6 +330,32 @@ HttpStatus http_download(const char *url, long timeout_seconds,
     /* STEP 4: Configure download options. */
     char errbuf[CURL_ERROR_SIZE] = {0};
     BodyBuffer buf = {0};
+
+    /* Restrict BOTH the initial request and every redirect. Fail closed if
+     * libcurl cannot apply the policy. Keep default TLS verification enabled.
+     * String options arrived in 7.85.0; retain older MSYS2 curl compatibility. */
+    CURLcode protocol_status;
+#if LIBCURL_VERSION_NUM >= 0x075500
+    protocol_status = curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "http,https");
+    if (protocol_status == CURLE_OK) {
+        protocol_status = curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR,
+                                          "http,https");
+    }
+#else
+    protocol_status = curl_easy_setopt(curl, CURLOPT_PROTOCOLS,
+                                      (long)(CURLPROTO_HTTP | CURLPROTO_HTTPS));
+    if (protocol_status == CURLE_OK) {
+        protocol_status = curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS,
+                                          (long)(CURLPROTO_HTTP | CURLPROTO_HTTPS));
+    }
+#endif
+    if (protocol_status != CURLE_OK) {
+        snprintf(response->detail, sizeof(response->detail),
+                 "Cannot restrict HTTP protocols: %.180s",
+                 curl_easy_strerror(protocol_status));
+        curl_easy_cleanup(curl);
+        return HTTP_ERR_INIT;
+    }
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);

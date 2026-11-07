@@ -1,6 +1,26 @@
-﻿# Web Crawler and Scraper in C
+# DeepDownload-C
 
-This repository is a university project organized as a reusable C11 library with separate demonstration programs. Parts 1–3 provide the public crawler API, HTTP(S) URL parsing, and single-page HTTP downloading. HTML extraction and recursive crawling are not yet integrated.
+This university project remains a reusable C11 static library with separate CLI
+demonstration programs. Parts 1–3 provide the public crawler API, HTTP(S) URL
+parsing, and single-page HTTP downloading. Phase 4 now provides standalone HTML
+anchor extraction. Recursive crawling is not yet integrated.
+
+## Build on Linux / Replit
+
+GCC, GNU Make and libcurl development files are required.
+
+```sh
+cd DeepDownload-C # from the surrounding Replit project; omit if already here
+make
+make test-unit   # deterministic API, URL and HTML tests
+make test-http-local # C-only loopback HTTP fixtures (POSIX; Windows prints SKIP)
+make test        # includes local fixtures and original network-dependent tests
+```
+
+Linux executables are `build/crawler-demo` and `build/demo_pipeline`.
+For a beginner explanation of the new functions, pointers, memory ownership,
+module integration and parsing limitations, see
+[`documentation/phase4.md`](documentation/phase4.md).
 
 ## Build on Windows
 
@@ -36,4 +56,25 @@ The pipeline demo calls the Part 1 API, then demonstrates URL parsing and the st
 
 ## Remaining work
 
-HTML extraction, link discovery, queue and visited tracking, and recursive crawl integration remain future work. See `documentation/progress.md` and `documentation/architecture.md`.
+Queue and visited tracking, recursive crawling, document downloads,
+deduplication, provenance and reporting remain future work. See
+`documentation/progress.md` and `documentation/architecture.md`.
+
+## Phase 4: HTML hyperlink extraction
+
+`include/html.h` and `src/html.c` provide `html_extract_links`,
+`html_links_free` and `html_status_message`. The extractor accepts page HTML
+and its final base URL, decodes practical HTML escapes, filters unsafe schemes
+and uses the existing `url_resolve` to return owned absolute HTTP(S) URLs.
+Duplicates stay in document order. It does not fetch links or change
+`crawler_run`.
+
+Run `make test-html` for the offline HTML suite and `make test-html-alloc`
+for optional GNU-linker allocation-failure tests.
+
+The targeted HTTP corrections require exact HTML/XHTML MIME media-type tokens
+(parameters allowed) and restrict initial/redirect protocols to HTTP(S), without
+disabling TLS verification. Local C fixtures verify redirect resolution,
+non-HTML rejection and the response size boundary. Public API signatures remain
+unchanged. See `documentation/phase4-test-results.md` for actual results and
+limitations.
