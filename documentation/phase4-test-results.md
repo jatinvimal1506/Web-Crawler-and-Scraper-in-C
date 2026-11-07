@@ -1,5 +1,8 @@
 # Phase 4 verification results
 
+Historical Phase 4 evidence, not the current Phase 5 status. For current results
+see `../prompt history/2026-11-07-phase5-handoff.md`.
+
 Observed after the targeted Phase 4 and authorized HTTP corrections in Replit
 Linux with GCC 16.2.0 and libcurl 8.14.1. These are execution results, not
 predictions. No native Windows runtime or browser testing is claimed.

@@ -1,5 +1,8 @@
 # Phase 4: HTML hyperlink extraction, explained
 
+Historical Phase 4 guide: statements about Phase 5 placeholders describe the
+Phase 4 baseline. Queue/visited are now implemented separately; see `phase5.md`.
+
 ## Scope and source
 
 DeepDownload-C remains the existing modular **C11 static library and C CLI

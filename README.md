@@ -3,7 +3,8 @@
 This university project remains a reusable C11 static library with separate CLI
 demonstration programs. Parts 1–3 provide the public crawler API, HTTP(S) URL
 parsing, and single-page HTTP downloading. Phase 4 now provides standalone HTML
-anchor extraction. Recursive crawling is not yet integrated.
+anchor extraction. Phase 5 adds a reusable FIFO URL/depth queue and normalized
+visited-URL set. Recursive crawling is not yet integrated.
 
 ## Build on Linux / Replit
 
@@ -13,6 +14,8 @@ GCC, GNU Make and libcurl development files are required.
 cd DeepDownload-C # from the surrounding Replit project; omit if already here
 make
 make test-unit   # deterministic API, URL and HTML tests
+make test-phase5 # offline queue and visited tests
+make test-phase5-alloc # deterministic queue/visited/URL allocation failures
 make test-http-local # C-only loopback HTTP fixtures (POSIX; Windows prints SKIP)
 make test-http-alloc # adds deterministic HTTP metadata-copy OOM tests
 make test        # includes local fixtures and original network-dependent tests
@@ -57,7 +60,7 @@ The pipeline demo calls the Part 1 API, then demonstrates URL parsing and the st
 
 ## Remaining work
 
-Queue and visited tracking, recursive crawling, document downloads,
+Recursive crawling, document downloads,
 deduplication, provenance and reporting remain future work. See
 `documentation/progress.md` and `documentation/architecture.md`.
 
@@ -83,4 +86,31 @@ limitations.
 Metadata copy failures now return out-of-memory with cleared owned response
 fields instead of a partial success. The HTML scanner excludes iframe and
 other supported raw-text blocks and recognizes entity-encoded question marks
-in unquoted queries. Queue/visited/BFS remain unimplemented.
+in unquoted queries. Queue/visited are implemented; BFS remains unimplemented.
+
+## Phase 5: queue and visited URLs
+
+`include/queue.h` provides a linked FIFO queue. Enqueue copies a nonempty URL
+and a nonnegative `int` depth; dequeue transfers the owned string to an item
+that the caller frees with `queue_item_free`. A queue containing `(A,0)`,
+`(B,1)`, `(C,2)` returns those items in exactly that order. A head/tail list
+makes linking/removal constant-time; copying the URL costs O(URL length).
+
+`include/visited.h` provides a simple linked set of canonical absolute HTTP(S)
+keys from the existing `url_normalize`. For example,
+`HTTPS://Example.COM:443/docs#top` and `https://example.com/docs` identify one
+key. Distinct paths/queries stay distinct. Membership/insertion is O(n*L),
+favoring clarity over hash-table scale. Duplicate, missing, invalid and
+out-of-memory outcomes are separate. Both containers own their allocations;
+`queue_free` and `visited_free` reset them for repeated cleanup/reuse.
+
+Start containers/items with `{0}`; do not shallow-copy populated containers.
+Queue strings are not validated/normalized by the queue itself.
+See [the student guide](documentation/phase5.md) for every function, pointer,
+allocation, error and the future-only Phase 6 scheduling/failure boundary.
+`crawler_run()` still returns `CRAWLER_NOT_IMPLEMENTED` for valid input.
+
+The Markdown-only [prompt history](prompt%20history/2026-11-07-project-history.md)
+contains accessible historical requests, the complete Phase 5 order and the
+acceptance/evidence handoff. No document downloading, AI, GUI or parallelism
+is implemented.

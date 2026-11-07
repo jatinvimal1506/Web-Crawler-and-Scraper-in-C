@@ -26,9 +26,13 @@ HTTP_TEST := $(BUILD)/test-http$(EXE)
 HTML_TEST := $(BUILD)/test-html$(EXE)
 LOCAL_HTTP_TEST := $(BUILD)/test-http-local$(EXE)
 HTTP_ALLOC_TEST := $(BUILD)/test-http-alloc$(EXE)
+QUEUE_TEST := $(BUILD)/test-queue$(EXE)
+VISITED_TEST := $(BUILD)/test-visited$(EXE)
+PHASE5_ALLOC_TEST := $(BUILD)/test-phase5-alloc$(EXE)
+TEST_HEADERS := tests/phase5_check.h
 HEADERS := $(wildcard include/*.h)
 
-.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local test-http-alloc
+.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local test-http-alloc test-phase5 test-phase5-alloc
 all: $(LIB) $(DEMO) $(PIPELINE_DEMO)
 
 $(BUILD):
@@ -72,11 +76,33 @@ $(BUILD)/http-alloc-test.o: src/http.c $(HEADERS) | $(BUILD)
 $(HTTP_ALLOC_TEST): tests/test_http_local.c $(BUILD)/http-alloc-test.o $(LIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) -DHTTP_ALLOC_TEST $< $(BUILD)/http-alloc-test.o $(LIB) $(LDLIBS) -o $@
 
+$(QUEUE_TEST): tests/test_queue.c $(TEST_HEADERS) $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) -o $@
+
+$(VISITED_TEST): tests/test_visited.c $(TEST_HEADERS) $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) -o $@
+
+# Separate allocator-instrumented C objects, NEVER added to libcrawler.a.
+# These three modules currently allocate with malloc/free, not realloc/calloc.
+$(BUILD)/phase5-alloc-%.o: src/%.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) -Dmalloc=phase5_test_malloc -Dfree=phase5_test_free -c $< -o $@
+
+PHASE5_ALLOC_OBJECTS := $(BUILD)/phase5-alloc-queue.o $(BUILD)/phase5-alloc-visited.o $(BUILD)/phase5-alloc-url.o
+$(PHASE5_ALLOC_TEST): tests/test_phase5_alloc.c $(TEST_HEADERS) $(PHASE5_ALLOC_OBJECTS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $< $(PHASE5_ALLOC_OBJECTS) -o $@
+
+test-phase5: $(QUEUE_TEST) $(VISITED_TEST)
+	$(RUN)test-queue$(EXE)
+	$(RUN)test-visited$(EXE)
+
+test-phase5-alloc: $(PHASE5_ALLOC_TEST)
+	$(RUN)test-phase5-alloc$(EXE)
+
 # Unit tests need no sockets. Local fixtures need loopback, not Internet access.
 # The original HTTP suite still uses public network endpoints.
-test: test-unit test-http-local test-http-alloc test-http
+test: test-unit test-phase5-alloc test-http-local test-http-alloc test-http
 
-test-unit: $(TEST) $(URL_TEST) $(HTML_TEST)
+test-unit: $(TEST) $(URL_TEST) $(HTML_TEST) test-phase5
 	$(RUN)test-crawler$(EXE)
 	$(RUN)test-url$(EXE)
 	$(RUN)test-html$(EXE)

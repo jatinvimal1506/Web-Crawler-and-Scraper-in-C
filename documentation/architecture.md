@@ -9,6 +9,8 @@ The project keeps the library and demonstration application separate. The Makefi
 - `http.c` / `http.h`: Part 3 single-page HTTP(S) downloader, using libcurl and the URL parser.
 - `html.c` / `html.h`: standalone Phase 4 anchor extraction, practical entity
   decoding, raw-text exclusions and relative HTTP(S) link resolution.
+- `queue.c` / `queue.h`: Phase 5 linked FIFO URL/depth ownership container.
+- `visited.c` / `visited.h`: Phase 5 linked canonical URL set using `url_normalize`.
 - `examples/demo.c`: Part 1 CLI that validates its arguments and demonstrates the current API status.
 - `examples/demo_pipeline.c`: presentation demo that calls the crawler API, URL parser, and downloader in sequence.
 
@@ -18,9 +20,9 @@ The project keeps the library and demonstration application separate. The Makefi
 `CRAWLER_NOT_IMPLEMENTED`; it does not orchestrate the modules. The pipeline
 demo calls `url_parse` and `http_download` directly after demonstrating the
 crawler API. Standalone HTML extraction is implemented and local C integration
-tests combine it with HTTP downloads. Queue/visited tracking (Phase 5) and BFS
-crawl integration (Phase 6) remain unimplemented; queue/visited sources are
-placeholders.
+tests combine it with HTTP downloads. Standalone Phase 5 queue/visited modules
+are implemented and tested but are NOT connected to the crawler entry point.
+BFS crawl integration (Phase 6) remains unimplemented.
 
 ## Ownership and failure boundary
 
@@ -37,4 +39,12 @@ The HTTP/HTML public signatures are unchanged.
 
 ## Planned crawl data flow
 
-Start URL → normalize → queue → download → parse and extract links → resolve and filter → visited set → queue. The root page will have depth zero; same-domain filtering and maximum depth will be applied by the future crawl engine. Concurrency is an optional extension.
+Future only: normalize/check key → enqueue URL/depth → mark scheduled in visited
+→ dequeue/download/extract → resolve/filter children → repeat. FIFO is
+BFS-friendly because new children go behind previously scheduled work.
+The root would have depth zero. Phase 6 must specify limits and failure policy
+before implementation; there is no cross-container atomic transaction.
+If enqueue fails, do not mark visited. If marking after enqueue fails, stop
+with an explicit error rather than continue with untracked queued work.
+See `phase5.md` for ownership, complexity and failure details.
+No concurrency is included or required by Phase 5.

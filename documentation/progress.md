@@ -39,12 +39,24 @@
 
 ## Parts not implemented in this working branch
 
-- Part 5: crawl queue and visited URL tracking.
 - Part 6: BFS crawler integration and live crawl statistics.
 - Part 7: integrated crawl testing and final system validation.
 
 Parts 3–4 are not yet integrated into `crawler_run`, which continues to return
-`CRAWLER_NOT_IMPLEMENTED` for valid configurations. Queue and visited remain
-placeholders. IPv6, internationalized names and exhaustive RFC 3986 conformance
+`CRAWLER_NOT_IMPLEMENTED` for valid configurations. Queue and visited are
+standalone reusable modules, not yet wired into the crawl engine.
+IPv6, internationalized names and exhaustive RFC 3986 conformance
 remain outside the existing URL module's scope. The optional Phase 4 allocation
 test also exercises failures in the URL resolution allocations it invokes.
+
+## Part 5 — Implemented, standalone only
+
+- Linked FIFO queue with owned URL copies and associated nonnegative depths.
+- Dequeue transfers ownership; repeatable item/container cleanup.
+- Visited list owns canonical keys from existing `url_normalize`.
+- Missing/duplicate/invalid/OOM/overflow outcomes are explicit.
+- Deterministic C tests: 1200 elements, boundaries, ownership, failure rollback.
+- Test-only allocator objects do not enter the production static library.
+- Student guide: `phase5.md`; full order/history/evidence: `../prompt history/`.
+- Original Phases 1–4 source/APIs/tests preserved. No HTTP/HTML edits.
+- Phase 6 and later DeepDownload enhancements still require explicit approval.
