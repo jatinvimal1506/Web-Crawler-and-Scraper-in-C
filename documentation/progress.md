@@ -37,12 +37,13 @@
 - Entity-aware unquoted query context (`&#63;`, hexadecimal references, `&quest;`).
 - Beginner guide: `documentation/phase4.md`.
 
-## Deferred beyond Phase 10
+## Deferred beyond Phase 11
 
-- Keyword/CSV reporting and final bulk orchestration.
+- Final bulk orchestration.
 
-Phases 1–10 are implemented, including bounded BFS through `crawler_run`, the
-single-document streamer, and one-file local organization.
+Phases 1–11 are implemented, including bounded BFS through `crawler_run`, the
+single-document streamer, one-file local organization, and metadata filtering/
+CSV reporting in Phase 11.
 Queue/visited remain reusable independent modules and are now used by it.
 IPv6, internationalized names and exhaustive RFC 3986 conformance
 remain outside the existing URL module's scope. The optional Phase 4 allocation
@@ -152,5 +153,31 @@ Phase 7 was subsequently explicitly approved and implemented:
   and actual acceptance evidence.
 - POSIX filesystem integration/fault tests skip on native Windows; Windows
   runtime and junction/reparse-point protections are not verified here.
-- Phase 11 keyword/CSV reporting and Phase 12 end-to-end orchestration remain
-  separate, gated phases. Phase 10 is not a crawler-to-file bulk pipeline.
+- Phase 11 below adds standalone metadata keyword filtering and CSV reporting.
+  Phase 12 end-to-end orchestration remains separately gated. Phase 10 is not a
+  crawler-to-file bulk pipeline.
+
+## Part 11 — Metadata filtering and CSV reporting
+
+- `ReportFilter` accepts 0–8 borrowed printable ASCII keywords, 1–64 bytes
+  each; case-insensitive ASCII literal matching checks either normalized
+  document URL or source-page URL. Empty filter includes everything.
+- `report_row_matches` examines metadata only, allocates nothing, and is usable
+  before any download result exists. KMP prefix matching keeps bounded search
+  linear in text plus keyword length.
+- `ReportRow` represents one `(document URL, source page)` relationship;
+  writer preserves order and does not collapse multiple sources for one file.
+- Safe CSV has the exact nine-column schema, quotes all text, escapes quotes,
+  preserves embedded CR/LF, uses CRLF record separators and mitigates
+  spreadsheet formula injection with an apostrophe prefix.
+- CSV writer limits inputs to 1000 rows and text fields to 4096 bytes, requires
+  an existing directory/safe `.csv` basename, creates exclusively, and removes
+  only a partial file it created on failure.
+- `ReportResult` owns its output path on success or cleanup failure and releases
+  it with `report_result_free`.
+- C-only unit, exact-byte CSV integration, boundary, no-overwrite and
+  allocator/write/close/cleanup failure tests are included in `make test`.
+- POSIX filesystem/fault fixtures skip on native Windows; Windows execution
+  remains NOT VERIFIED. Metadata filtering never parses downloaded contents.
+- Phase 12 is still pending. Full decisions and measured handoff:
+  `../prompt history/2026-11-09-phase11-design-and-handoff.md`.

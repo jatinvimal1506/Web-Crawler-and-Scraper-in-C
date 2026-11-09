@@ -5,7 +5,7 @@ CFLAGS += -std=c11 -Wall -Wextra -Wpedantic -Iinclude
 LDLIBS ?= -lcurl
 BUILD := build
 LIB := $(BUILD)/libcrawler.a
-SOURCES := src/project.c src/url.c src/http.c src/http_scoped.c src/html.c src/queue.c src/visited.c src/document.c src/download.c src/sha256.c src/organize.c
+SOURCES := src/project.c src/url.c src/http.c src/http_scoped.c src/html.c src/queue.c src/visited.c src/document.c src/download.c src/sha256.c src/organize.c src/report.c
 OBJECTS := $(SOURCES:src/%.c=$(BUILD)/%.o)
 # Retain native cmd.exe behavior on Windows; use POSIX commands on Linux.
 ifeq ($(OS),Windows_NT)
@@ -45,12 +45,15 @@ SHA256_TEST := $(BUILD)/test-sha256$(EXE)
 ORGANIZE_TEST := $(BUILD)/test-organize$(EXE)
 ORGANIZE_INTEGRATION_TEST := $(BUILD)/test-organize-integration$(EXE)
 ORGANIZE_ALLOC_TEST := $(BUILD)/test-organize-alloc$(EXE)
+REPORT_TEST := $(BUILD)/test-report$(EXE)
+REPORT_CSV_TEST := $(BUILD)/test-report-csv$(EXE)
+REPORT_ALLOC_TEST := $(BUILD)/test-report-alloc$(EXE)
 CRAWLER_ALLOC_TEST := $(BUILD)/test-crawler-alloc$(EXE)
 CRAWLER_ENGINE_TEST := $(BUILD)/test-crawler-engine$(EXE)
 TEST_HEADERS := tests/phase5_check.h
 HEADERS := $(wildcard include/*.h) src/http_internal.h
 
-.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local test-http-alloc test-phase5 test-phase5-alloc test-crawler-engine test-crawler-alloc test-phase7-safety test-phase7-alloc test-document test-document-integration test-document-alloc test-download test-download-integration test-download-alloc test-sha256 test-organize test-organize-integration test-organize-alloc
+.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local test-http-alloc test-phase5 test-phase5-alloc test-crawler-engine test-crawler-alloc test-phase7-safety test-phase7-alloc test-document test-document-integration test-document-alloc test-download test-download-integration test-download-alloc test-sha256 test-organize test-organize-integration test-organize-alloc test-report test-report-csv test-report-alloc
 all: $(LIB) $(DEMO) $(PIPELINE_DEMO) $(BFS_DEMO) $(DOCUMENT_DEMO) $(DOWNLOAD_DEMO)
 
 $(BUILD):
@@ -155,7 +158,7 @@ test-crawler-alloc: $(CRAWLER_ALLOC_TEST)
 
 # Unit tests need no sockets. Local fixtures need loopback, not Internet access.
 # The original HTTP suite still uses public network endpoints.
-test: test-unit test-phase5-alloc test-crawler-engine test-crawler-alloc test-http-local test-http-alloc test-phase7-safety test-phase7-alloc test-document test-document-integration test-document-alloc test-download test-download-integration test-download-alloc test-sha256 test-organize test-organize-integration test-organize-alloc test-http
+test: test-unit test-phase5-alloc test-crawler-engine test-crawler-alloc test-http-local test-http-alloc test-phase7-safety test-phase7-alloc test-document test-document-integration test-document-alloc test-download test-download-integration test-download-alloc test-sha256 test-organize test-organize-integration test-organize-alloc test-report test-report-csv test-report-alloc test-http
 
 test-unit: $(TEST) $(URL_TEST) $(HTML_TEST) test-phase5
 	$(RUN)test-crawler$(EXE)
@@ -276,6 +279,31 @@ test-organize-integration: $(ORGANIZE_INTEGRATION_TEST)
 
 test-organize-alloc: $(ORGANIZE_ALLOC_TEST)
 	$(RUN)test-organize-alloc$(EXE)
+
+# Phase 11 metadata filtering and safe CSV reporting.
+$(REPORT_TEST): tests/test_report.c $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LDLIBS) -o $@
+
+$(REPORT_CSV_TEST): tests/test_report_csv.c $(LIB) | $(BUILD)
+	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LDLIBS) -o $@
+
+REPORT_ALLOC_NAMES := -Dmalloc=report_test_malloc -Dfree=report_test_free -Dfwrite=report_test_fwrite -Dfclose=report_test_fclose -Dremove=report_test_remove
+REPORT_ALLOC_OBJECTS := $(BUILD)/report-alloc-report.o
+
+$(BUILD)/report-alloc-%.o: src/%.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) $(REPORT_ALLOC_NAMES) -c $< -o $@
+
+$(REPORT_ALLOC_TEST): tests/test_report_alloc.c $(REPORT_ALLOC_OBJECTS) $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) $< $(REPORT_ALLOC_OBJECTS) $(LIB) $(LDLIBS) -o $@
+
+test-report: $(REPORT_TEST)
+	$(RUN)test-report$(EXE)
+
+test-report-csv: $(REPORT_CSV_TEST)
+	$(RUN)test-report-csv$(EXE)
+
+test-report-alloc: $(REPORT_ALLOC_TEST)
+	$(RUN)test-report-alloc$(EXE)
 
 # Optional: requires a GNU-compatible linker (Linux or MSYS2).
 $(BUILD)/test-html-alloc$(EXE): tests/test_html_alloc.c src/html.c src/url.c $(HEADERS) | $(BUILD)

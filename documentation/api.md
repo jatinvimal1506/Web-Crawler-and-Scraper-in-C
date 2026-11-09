@@ -154,8 +154,7 @@ The C CLI is `build/download-document`:
 
 It handles one document only. Phase 10 separately hashes and organizes an
 already-completed local file; this downloader CLI does not invoke that API.
-Phase 11 keyword/CSV reporting and Phase 12 bounded orchestration remain
-pending.
+Phase 12 bounded orchestration remains pending.
 
 ## Phase 10 SHA-256 and file organization API
 
@@ -204,8 +203,68 @@ for diagnosis.
 POSIX builds reject symlink input/root/type directories. Windows junction or
 reparse-point detection is not guaranteed by the current CRT implementation.
 The module handles one local file only; it does not crawl directories or
-perform Phase 11/12 reporting/orchestration. See
+invoke the standalone Phase 11 report API or Phase 12 orchestration. See
 [`phase10.md`](phase10.md) for beginner-oriented examples and test descriptions.
+
+## Phase 11 metadata filter and CSV API
+
+`include/report.h` provides `ReportFilter`, `ReportRow`, `ReportResult` and
+these functions:
+
+- `report_status_message(status)` and `report_row_status_name(status)` return
+  static strings; do not free them.
+- `report_result_init(result)` initializes fresh or previously freed storage
+  without allocating. Do not call it while the result owns a path; free first.
+- `report_result_free(result)` releases the result-owned `output_path`, resets
+  the structure, and is safe for NULL/repeated cleanup.
+- `report_row_matches(row, filter, matches)` checks only the borrowed document
+  URL and source-page URL. `matches` is set to zero before validation. It does
+  no I/O or allocation, so Phase 12 can call it before download outcomes are
+  known.
+- `report_write_csv(directory, basename, rows, count, filter, result)` checks
+  the full row values and writes a new report file. Inputs and all row/keyword
+  strings are borrowed for the call.
+
+A filter accepts zero through eight keyword strings. Each must be one through
+64 printable ASCII bytes; control and non-ASCII bytes are rejected. Matching is
+ASCII case-insensitive literal substring matching. Any keyword found in either
+URL selects the row; an empty filter includes every row. No document contents
+are opened, searched, or extracted.
+
+A `ReportRow` is exactly one document/source-page relationship. Each pointer is
+borrowed, and unavailable hash, stored path, and error text are represented by
+an empty string. A new or duplicate stored-file outcome must carry a 64-digit
+lowercase SHA-256, nonempty path, and nonzero byte size. Failed/skipped rows
+must not claim a stored hash or path. The writer preserves input order, so
+separate source relationships for the same document remain separate rows.
+
+The CSV header is exactly:
+
+```text
+document_url,document_type,source_page_url,source_depth,status,sha256,size_bytes,stored_path,error
+```
+
+Text values are always double-quoted; embedded quotes are doubled; commas and
+embedded CR/LF stay inside the quoted field. Record separators are CRLF.
+Potential spreadsheet formulas are protected by prefixing an apostrophe to a
+text field whose first non-control/non-whitespace byte is `=`, `+`, `-` or `@`.
+The original borrowed strings are not changed. Numeric depth and byte counts
+are decimal and unquoted.
+
+Text fields are limited to 4,096 bytes and the writer accepts at most 1,000
+input rows, including rows later filtered out. The output directory must
+already exist. The safe ASCII basename must end in `.csv` and be at most 128
+bytes; traversal, separators and common Windows device names are rejected. The
+file is exclusively created and never overwrites an existing report. An empty
+match set writes only the header.
+
+`ReportResult.rows_written` counts complete data rows (not the header), and
+`rows_excluded` counts input rows not selected by the filter. On an I/O error,
+the writer removes only the new file created by this call; if removal fails,
+`REPORT_ERROR_CLEANUP` keeps the owned path for diagnosis. On success the result
+also owns its path. Release either with `report_result_free`. CSV filesystem and
+fault-injection tests use POSIX temporary directories; native Windows execution
+and Windows junction behavior are not verified here.
 
 ## Part 2 URL API
 

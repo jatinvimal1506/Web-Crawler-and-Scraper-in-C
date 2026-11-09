@@ -22,6 +22,8 @@ The project keeps the library and demonstration application separate. The Makefi
   fixed memory use and a 20 MiB inclusive file limit.
 - `organize.c` / `organize.h`: Phase 10 one-file placement in type folders,
   content deduplication, exclusive creation and post-copy verification.
+- `report.c` / `report.h`: Phase 11 metadata-only keyword filtering and
+  bounded, formula-safe CSV writing with source-page rows preserved.
 - `examples/demo.c`: Part 1 CLI that validates its arguments and demonstrates the current API status.
 - `examples/demo_pipeline.c`: presentation demo that calls the crawler API, URL parser, and downloader in sequence.
 - `examples/discover_documents.c`: Phase 8 CLI for a controlled URL/depth
@@ -153,9 +155,10 @@ library has no allocation or file-operation injection hooks. See
 alternatives and policy trade-offs.
 
 Phase 9 remains a one-document transfer API; Phase 10 separately hashes and
-organizes one completed local file. Neither phase parses PDF/DOCX/ZIP internals
-or creates a bulk report. Phase 11 keyword/CSV reporting and Phase 12 end-to-end
-orchestration remain pending and must pass their own acceptance gates.
+organizes one completed local file. Neither phase parses PDF/DOCX/ZIP internals.
+Phase 11 below provides a reusable metadata filter and CSV writer but does not
+connect them to crawling/downloading. Phase 12 end-to-end orchestration remains
+pending and must pass its own acceptance gate.
 
 ## Phase 10 local hashing and organization
 
@@ -186,3 +189,34 @@ The organizer checks a fixed three folders, so lookup compares at most three
 candidate files; each byte comparison and copy is O(file bytes). Memory stays
 constant. This is intentionally simpler than a general index or directory
 scanner and is appropriate for Phase 10's one-file operation.
+
+## Phase 11 metadata reporting
+
+`report_row_matches` searches only a document URL and its source-page URL. It
+uses up to eight borrowed ASCII keywords, literal substring matching, and
+ASCII-only case folding. A zero-keyword filter selects every row. Its KMP
+prefix table provides O(text length + keyword length) matching with a fixed
+64-entry local table; the function allocates nothing and has no file or network
+side effects. This allows Phase 12 to select source/document relationships
+before download results exist.
+
+`ReportRow` is one provenance relationship, not one unique URL. The CSV writer
+preserves the supplied order, so two source pages for one document still
+produce two rows. It validates outcome/hash/path consistency, quotes every
+text value, doubles embedded quotes, preserves quoted commas and CR/LF, and
+uses CRLF between records. It prefixes an apostrophe when a text value could
+be interpreted as a spreadsheet formula after leading ASCII controls or
+whitespace.
+
+`report_write_csv` requires an existing directory and safe CSV basename, limits
+input to 1000 rows and 4096 bytes per text field, and exclusively creates its
+output. It never appends or overwrites. The result owns the output-path string
+on success or cleanup failure; freeing the result releases that string. A
+partial new report is removed on write/close failure. If cleanup fails, the
+path is preserved in the result. The writer performs no network requests and
+does not modify organizer/downloaded files.
+
+Phase 11 searches metadata only. It does not parse document contents and does
+not yet orchestrate discovery, downloads or file organization. See
+`../prompt history/2026-11-09-phase11-design-and-handoff.md` for decisions,
+acceptance evidence and limitations.

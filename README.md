@@ -4,8 +4,9 @@ This university project is a reusable C11 static library with separate C CLI
 demos. Phases 1–8 provide the crawler, URL/HTTP/HTML modules, reusable queue
 and visited set, bounded BFS, and PDF/DOCX/ZIP link discovery with provenance.
 Phase 9 adds a separate, one-document binary streamer. Phase 10 hashes and
-organizes one completed file at a time. Keyword/CSV reporting and final
-orchestration in Phases 11–12 remain pending.
+organizes one completed file at a time. Phase 11 filters discovered URL
+metadata by keywords and writes safe CSV reports. Phase 12's full workflow
+integration remains pending.
 
 ## Build on Linux / Replit
 
@@ -31,6 +32,9 @@ make test-sha256 # known-answer and file-size-boundary checks
 make test-organize # folder, content deduplication and ownership checks
 make test-organize-integration # local filesystem and conflict checks
 make test-organize-alloc # allocation and file-I/O failure injection
+make test-report # metadata keyword-matching tests
+make test-report-csv # exact CSV encoding and filesystem tests
+make test-report-alloc # injected allocation, write, close and cleanup failures
 make test        # includes local fixtures and original network-dependent tests
 ```
 
@@ -82,8 +86,7 @@ separately; `crawler_run` itself already performs bounded BFS.
 
 ## Remaining work
 
-Keyword/CSV reporting (Phase 11) and final integration (Phase 12) remain future
-work. See
+Final end-to-end integration (Phase 12) remains future work. See
 `documentation/progress.md` and `documentation/architecture.md`.
 
 ## Phase 4: HTML hyperlink extraction
@@ -213,7 +216,8 @@ Earlier Phase 6 history records describe the old post-fetch policy and are
 intentionally preserved, not silently rewritten.
 
 Phase 10 has now added standalone hashing and organization for one completed
-local file. Phases 11–12 remain pending and are separate acceptance-gated work.
+local file. Phase 11 below adds metadata filtering and CSV reporting. Phase 12
+remains pending and is a separate acceptance-gated integration phase.
 No mode/configuration change, paid upgrade or deployment was made.
 
 ## Phase 8: public-document link discovery and provenance
@@ -310,5 +314,40 @@ ownership, failure behavior and scope. The full Phase 10 instruction and
 evidence-based handoff are in `prompt history/`.
 
 Phase 10 is not a bulk pipeline: it takes one completed local file. Phase 11
-will add keyword filtering and CSV only after this phase's verified delivery;
-Phase 12 will provide the bounded end-to-end workflow only after Phase 11.
+does not integrate crawling and downloading; Phase 12 will provide the bounded
+end-to-end workflow only after Phase 11.
+
+## Phase 11: metadata keyword filtering and CSV
+
+`include/report.h` and `src/report.c` provide an allocation-free metadata
+matcher and a bounded CSV writer. Up to eight borrowed ASCII keywords (1–64
+characters each) are matched case-insensitively as literal substrings against
+either the document URL or its source-page URL. An empty keyword list includes
+all rows. This searches metadata only; it never reads or extracts PDF, DOCX or
+ZIP contents.
+
+The CSV contains one row for each source-document relationship in the supplied
+order, using the documented nine-column schema. Text is quoted, embedded quotes
+are doubled, CR/LF inside fields are preserved, and rows end in CRLF. Fields
+that could begin a spreadsheet formula are prefixed with an apostrophe before
+quoting. The writer accepts at most 1,000 rows and 4,096 bytes per text field,
+requires an existing directory and a safe `.csv` basename, and exclusively
+creates the file rather than overwriting one. If no rows match, it writes the
+header only.
+
+`ReportRow` pointers are borrowed for each call. A `ReportResult` owns
+`output_path` only after success or when cleanup of a failed new file itself
+fails; release it with `report_result_free`. Failed and skipped rows cannot
+claim a stored hash or path. `report_row_matches` inspects only the two
+metadata URLs, so Phase 12 can filter before download outcomes exist.
+
+```sh
+make test-report
+make test-report-csv
+make test-report-alloc
+```
+
+The metadata unit suite is portable C. CSV filesystem and fault-injection tests
+use POSIX temporary directories and explicitly skip on native Windows. See
+[`documentation/phase11.md`](documentation/phase11.md) and the Phase 11 prompt
+history handoff for exact test counts, ownership and limitations.

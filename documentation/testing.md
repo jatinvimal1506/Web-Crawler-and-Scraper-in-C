@@ -23,6 +23,9 @@ make test-sha256
 make test-organize
 make test-organize-integration
 make test-organize-alloc
+make test-report
+make test-report-csv
+make test-report-alloc
 ```
 
 `make` also builds the retained pipeline demo and the real `crawler-bfs` CLI.
@@ -34,7 +37,8 @@ the current demo, not an unpermissioned public-site crawl.
 
 `make test` includes the original API/URL tests, standalone HTML tests, local
 HTTP fixtures, Phase 5 tests, HTTP metadata allocation-failure tests, Phase 8
-discovery, Phase 9 download tests, Phase 10 hash/organization tests, plus original live HTTP tests. The live suite may skip probes or fail when public network access is
+discovery, Phase 9 download tests, Phase 10 hash/organization tests, Phase 11
+report tests, plus original live HTTP tests. The live suite may skip probes or fail when public network access is
 blocked. Local fixtures use only a C server bound to loopback on a free port.
 
 Phase 8's `test-document` covers URL-path extension parsing, case, query/
@@ -269,3 +273,31 @@ are not linked into `libcrawler.a`. It also explicitly skips on native Windows.
 This accounting is not a process-wide leak proof. Actual clean-build, suite,
 strict compiler, sanitizer, Windows and Git evidence for this delivery is
 recorded in `../prompt history/2026-11-09-phase10-design-and-handoff.md`.
+
+## Phase 11 metadata filter and CSV tests
+
+`make test-report` is a portable C unit suite for zero through eight keywords,
+one-to-64-byte printable ASCII validation, empty-filter inclusion,
+case-insensitive substring matches in either URL, any-keyword behavior,
+overlap/near-match cases, malformed rows and filter inputs, and proof that the
+matcher does not depend on download results. It does no I/O. The implementation
+uses a fixed KMP prefix array to avoid repeated rescanning of long near-matches.
+
+`make test-report-csv` writes deterministic files in a temporary directory and
+compares exact bytes. It checks the header, output order, multiple source rows
+for one document, quote/comma/CRLF handling, formula-prefix mitigation, empty
+fields, matching and excluded counts, header-only reports, safe basenames,
+existing-file preservation, invalid inputs, the 1000-row boundary and
+caller-string preservation.
+
+`make test-report-alloc` uses separate C test objects and injected `malloc`,
+`fwrite`, `fclose` and `remove` failures. It checks first/last write failures,
+allocation failure, close failure, cleanup failure with an owned leftover path,
+successful retry, and outstanding allocation accounting. No wrappers are
+linked into the release static library.
+
+The filesystem and fault-injection targets use POSIX temporary directories and
+explicitly print `SKIP` on native Windows. The unit matcher is portable C11.
+Native Windows execution remains NOT VERIFIED. Actual Phase 11 counts and full
+regression results are in
+`../prompt history/2026-11-09-phase11-design-and-handoff.md`.
