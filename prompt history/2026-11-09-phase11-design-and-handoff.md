@@ -106,7 +106,7 @@ caller can locate it.
 | AddressSanitizer + UndefinedBehaviorSanitizer for Phase 11 targets | PASS | All three Phase 11 targets pass with leak detection disabled; no ASan/UBSan report |
 | Leak-enabled sanitizer / Valgrind | NOT VERIFIED | LeakSanitizer exits with its environment error under ptrace; Valgrind is not installed |
 | Native Windows/MSYS2 runtime | NOT VERIFIED | This session ran on Linux; POSIX CSV/fault targets print SKIP on Windows. The Makefile retains its Windows branch |
-| GitHub commit/push receipt | PENDING | Fill after the one safe Phase 11 push and remote SHA verification |
+| GitHub commit/push receipt | PASS | Normal non-force push exit 0; origin and public GitHub `main` both matched the Phase 11 implementation commit SHA after push |
 | Phase 12 orchestration | NOT STARTED | Deliberately outside this Phase 11 implementation gate |
 
 ## Actual commands and results
@@ -191,13 +191,19 @@ limited to the already-authorized bounded orchestration work order.
 
 ## Git delivery receipt
 
-At the time this handoff was first staged, local `main`, `origin/main`, and the
-public GitHub `main` were all at
-`fe5bfb44c78f9ed7183d2726efcad1148a12a997`. The Phase 11 change set was
-uncommitted and limited to C source/header/tests, Makefile, and Markdown
-documentation. The Phase 11 commit and push are intentionally recorded below
-only after actual commit and remote verification:
+Before the Phase 11 push, local `main`, `origin/main`, and the public GitHub
+`main` all matched the Phase 10 receipt
+`fe5bfb44c78f9ed7183d2726efcad1148a12a997`; the worktree was clean after the
+Phase 11 commit. The normal non-force `git push origin main` completed with
+exit 0. Immediately after that push, both `origin/main` and public GitHub
+`main` matched:
 
-- Phase 11 implementation commit: **PENDING**
-- Push result: **PENDING**
-- Verified GitHub `main` SHA: **PENDING**
+- Phase 11 implementation commit: `98891c8af9bca66414d1a44758483ae884b6067f`
+- Push result: **PASS**; normal push, no force; exit 0
+- Verified GitHub `main` SHA after implementation push:
+  `98891c8af9bca66414d1a44758483ae884b6067f`
+
+This handoff is then included in a separate documentation-only receipt commit.
+The final main-branch head after that receipt is reported in the user-facing
+handoff; the implementation commit and its successful push remain recorded
+above.
