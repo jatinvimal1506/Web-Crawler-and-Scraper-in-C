@@ -27,7 +27,7 @@ Outer web scaffold and agent-mode configuration were not part of this commit.
 | H | PASS | README and api/architecture/progress/testing updated for actual Phase 7; former valid NOT_IMPLEMENTED sentence removed; historical prompt receipts unchanged. |
 | I | PASS | Full accessible A–L instruction, decisions/ownership and this evidence file retained under exact prompt history folder, along with prior Markdown. |
 | J | PASS | Fresh clean build, full make test, every requested specialized target, new safety/alloc targets, strict sanitizers and actual controlled CLI demo: commands/statuses below. |
-| K | See verified Git receipt below | Only the 22 listed C-project C/header/Makefile/Markdown files; normal non-force delivery only after tests and remote-state check. |
+| K | PASS source upload; docs receipt separately verified | Only the 22 listed C-project C/header/Makefile/Markdown files; normal non-force delivery after tests, permission preflight and remote-state check. |
 | L | PASS handoff; delivery receipt follows | All limits/gaps separated, next-development readiness conditional on fresh approval; NO PHASE 8 OR LATER PHASE STARTED. |
 
 ## Changes: exact 22-file C-project inventory
@@ -199,8 +199,49 @@ correctly says redirects checked before each request. No website published.
 
 ## Git delivery receipt
 
-At creation of this report, all code/tests are verified and live origin still
-equals baseline. Commit/push has not yet occurred. This section will receive
-the actual source-commit SHA, normal push result and independently queried
-remote SHA after the authorized delivery attempt. It does not claim upload
-before evidence exists.
+Source commit:
+[`29988d7f3676b16b415e59a57ba1aaf2f7b15c3b`](https://github.com/jatinvimal1506/Web-Crawler-and-Scraper-in-C/commit/29988d7f3676b16b415e59a57ba1aaf2f7b15c3b)
+on **main**, message:
+`Complete Phase 7 timeout and pre-request redirect safety validation`.
+
+Actual command sequence, all exit **0**:
+
+```sh
+git diff --cached --check
+git commit -m "Complete Phase 7 timeout and pre-request redirect safety validation"
+GIT_TERMINAL_PROMPT=0 git push --dry-run origin main
+git ls-remote origin refs/heads/main
+GIT_TERMINAL_PROMPT=0 git push origin main
+git rev-parse HEAD
+git rev-parse origin/main
+git ls-remote origin refs/heads/main
+GIT_TERMINAL_PROMPT=0 git ls-remote https://github.com/jatinvimal1506/Web-Crawler-and-Scraper-in-C.git refs/heads/main
+git status --short
+```
+
+Immediately before the actual push, live main still equaled
+`0f345a07bccfb9e9d8ae642488cc2295431c96bd`. Permission preflight passed;
+**one normal non-force source push succeeded**, no 403/conflict, no retry.
+Afterward HEAD, origin/main, live proxy main and independent canonical GitHub
+main ALL equaled **29988d7f3676b16b415e59a57ba1aaf2f7b15c3b**; C tree clean.
+Remote receipt:
+
+```text
+0f345a0..29988d7  main -> main
+```
+
+Configured origin remains Replit's secure GitHub proxy for the intended
+repository; it was not changed. Canonical GitHub was separately queried,
+not inferred from a local tracking ref.
+
+This final source-upload receipt is a necessary **docs-only follow-up commit**
+to this file, authorized by the work order. Its own hash cannot be embedded in
+its contents without changing the hash. The Agent's final response independently
+reports its exact SHA and verifies live GitHub equals it; it advances main
+beyond the source commit without altering any tested C file. Identify that
+documentation commit using:
+
+```sh
+git log -1 --format='%H %s' -- 'prompt history/2026-11-09-phase7-acceptance-and-handoff.md'
+git ls-remote origin refs/heads/main
+```
