@@ -29,7 +29,7 @@ typedef struct {
     const char *start_url;   /* Borrowed; must stay valid for crawler_run(). */
     size_t max_depth;        /* Root page has depth zero. */
     int same_domain;         /* Exact seed hostname if 1. Both modes pin port. */
-    long timeout_seconds;    /* Must be greater than zero. */
+    long timeout_seconds;    /* 1..3600 seconds, inclusive, per HTTP transfer. */
 } CrawlerConfig;
 
 typedef struct {
@@ -46,7 +46,7 @@ typedef struct {
  * when validation fails. No caller-visible memory is allocated.
  * Single-threaded BFS, depth 0 root, no automatic retries. SAME_DOMAIN pins
  * exact canonical hostname; effective seed port is pinned in BOTH modes.
- * Redirect scope is checked AFTER download (not network-level isolation).
+ * Each redirect target is checked BEFORE its request. Not an IP/DNS firewall.
  * Root failures return an error; non-root failures continue, ending PARTIAL.
  * Budgets return LIMIT_REACHED, never an exhaustive-success claim.
  */

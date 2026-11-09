@@ -37,9 +37,9 @@
 - Entity-aware unquoted query context (`&#63;`, hexadecimal references, `&quest;`).
 - Beginner guide: `documentation/phase4.md`.
 
-## Parts not implemented in this working branch
+## Deferred beyond the original seven-phase crawler
 
-- Part 7: integrated crawl testing and final system validation.
+- Future DeepDownload document discovery/downloads/provenance/file dedup/reporting.
 
 Parts 1–6 are implemented, including bounded BFS through `crawler_run`.
 Queue/visited remain reusable independent modules and are now used by it.
@@ -66,10 +66,27 @@ test also exercises failures in the URL resolution allocations it invokes.
   invariants abort. LIMIT_REACHED never claims exhaustive success.
 - All stats defined centrally; checked additions, depth INT_MAX guard.
 - Exact seed hostname in same-domain mode; effective port pinned in both.
-- Final redirect scope checked after fetch, NOT network isolation.
+- Phase 6 originally checked final scope after fetch; Phase 7 replaces this
+  with validated pre-request redirects (still NOT an IP/DNS firewall).
 - Bounded HTML extraction extension avoids unlimited temporary URL arrays.
 - C-only loopback/order/stats/error/budget tests and whole-engine fault tests.
 - C CLI plus actual controlled demonstration. Prior modules/tests retained,
   except the required basic API valid-run assertion now uses a C stub.
 - Complete order, decisions and handoff: `../prompt history/2026-11-08-phase6-*`.
-- NO PHASE 7 STARTED. No document downloader/AI/UI/concurrency/deployment.
+- At Phase 6 delivery, Phase 7 had not started and no document/AI/UI features
+  were included.
+
+Phase 7 was subsequently explicitly approved and implemented:
+
+## Part 7 — Final validation and safety hardening
+
+- HTTP/crawler timeout 1..3600 enforced before networking, all curl options checked.
+- Additive scoped downloader validates redirects before each target request.
+- Exact host/seed-port policy, five hops, HTTPS downgrade refusal.
+- Standalone downloader and public config/stat layouts retained.
+- Invalid timeout/option zero-request proofs; redirects/status/partial bodies/
+  global candidate and alias-key budgets; real scoped/BFS allocation sweeps.
+- Stale testing text corrected; native Windows remains NOT VERIFIED,
+  POSIX fixtures explicitly SKIP; actual sanitizer/leak observations recorded.
+- Full order/decisions/evidence: `../prompt history/2026-11-09-phase7-*`.
+- NO PHASE 8 OR LATER PHASE STARTED. No document features or deployment.

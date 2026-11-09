@@ -57,9 +57,9 @@ static unsigned effective_port(const ParsedUrl *url)
         : strcmp(url->scheme, "https") == 0 ? 443U : 80U;
 }
 
-/* Both modes pin the seed's effective port; exact host is additionally pinned
- * in same_domain mode. This is a parsing/scheduling policy, NOT a redirect
- * firewall: the existing downloader follows redirects before this check. */
+/* Both modes pin effective port; strict mode also pins canonical hostname.
+ * The scoped transport repeats this policy BEFORE each redirect request.
+ * This final defense-in-depth check is not an IP/DNS/SSRF firewall. */
 static CrawlerStatus in_scope(const Crawl *crawl, const char *url, int *allowed)
 {
     ParsedUrl parts = {0};
@@ -112,7 +112,7 @@ static CrawlerStatus http_failure(HttpStatus status)
     if (status == HTTP_ERR_OUT_OF_MEMORY) {
         return CRAWLER_OUT_OF_MEMORY;
     }
-    if (status == HTTP_ERR_NOT_HTML) {
+    if (status == HTTP_ERR_NOT_HTML || status == HTTP_ERR_SCOPE) {
         return CRAWLER_PARSE_ERROR;
     }
     if (status == HTTP_ERR_BAD_URL || status == HTTP_ERR_INVALID_ARGUMENT) {
@@ -139,7 +139,9 @@ static CrawlerStatus process_page(Crawl *crawl, const UrlQueueItem *item)
     if ((size_t)item->depth > crawl->stats->max_depth_reached) {
         crawl->stats->max_depth_reached = (size_t)item->depth;
     }
-    downloaded = http_download(item->url, crawl->config->timeout_seconds, &response);
+    downloaded = http_download_scoped(item->url, crawl->config->timeout_seconds,
+                                     crawl->config->start_url, crawl->config->same_domain,
+                                     &response);
     if (downloaded == HTTP_ERR_OUT_OF_MEMORY) {
         result = http_failure(downloaded);
         goto failed;
@@ -265,7 +267,8 @@ CrawlerStatus crawler_run(const CrawlerConfig *config, CrawlerStats *stats)
     if (config == NULL || stats == NULL || config->start_url == NULL ||
         config->start_url[0] == '\0' ||
         (config->same_domain != 0 && config->same_domain != 1) ||
-        config->timeout_seconds <= 0) {
+        config->timeout_seconds <= 0 ||
+        config->timeout_seconds > HTTP_MAX_TIMEOUT_SECONDS) {
         return CRAWLER_INVALID_ARGUMENT;
     }
     crawl.config = config;

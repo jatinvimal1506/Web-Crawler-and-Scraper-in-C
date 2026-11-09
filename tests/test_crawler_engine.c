@@ -94,17 +94,17 @@ int main(void)
     run("/nul-alias", 2, 1, CRAWLER_PARTIAL,
         (CrawlerStats){1, 1, 2, 1, crawler_fixture_body_size(FIX_NUL_ALIAS) + 4});
     order((unsigned[]){FIX_NUL_ALIAS, FIX_NUL_REDIRECT, FIX_NUL}, 3);
-    run("/off-redirect", 1, 1, CRAWLER_PARSE_ERROR, (CrawlerStats){0, 1, 0, 0, off});
-    order((unsigned[]){FIX_OFF_REDIRECT, FIX_OFF_LANDING | FIX_LOCALHOST_BIT}, 2);
+    run("/off-redirect", 1, 1, CRAWLER_PARSE_ERROR, (CrawlerStats){0, 1, 0, 0, 0});
+    order((unsigned[]){FIX_OFF_REDIRECT}, 1); /* Blocked destination NEVER requested. */
     run("/off-redirect", 1, 0, CRAWLER_OK, (CrawlerStats){2, 0, 1, 1, off + 5});
     order((unsigned[]){FIX_OFF_REDIRECT, FIX_OFF_LANDING | FIX_LOCALHOST_BIT,
                       FIX_OFF_CHILD | FIX_LOCALHOST_BIT}, 3);
     run("/port-redirect", 1, 1, CRAWLER_PARSE_ERROR,
-        (CrawlerStats){0, 1, 0, 0, crawler_fixture_body_size(FIX_PORT_LANDING)});
-    order((unsigned[]){FIX_PORT_REDIRECT, FIX_PORT_LANDING}, 2);
+        (CrawlerStats){0, 1, 0, 0, 0});
+    order((unsigned[]){FIX_PORT_REDIRECT}, 1);
     run("/port-redirect", 1, 0, CRAWLER_PARSE_ERROR,
-        (CrawlerStats){0, 1, 0, 0, crawler_fixture_body_size(FIX_PORT_LANDING)});
-    order((unsigned[]){FIX_PORT_REDIRECT, FIX_PORT_LANDING}, 2);
+        (CrawlerStats){0, 1, 0, 0, 0});
+    order((unsigned[]){FIX_PORT_REDIRECT}, 1);
     run("/scope-strict", 1, 1, CRAWLER_OK,
         (CrawlerStats){2, 0, 6, 1, crawler_fixture_body_size(FIX_SCOPE_STRICT) + 2});
     order((unsigned[]){FIX_SCOPE_STRICT, FIX_OK}, 2);

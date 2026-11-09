@@ -5,7 +5,8 @@ demonstration programs. Parts 1–3 provide the public crawler API, HTTP(S) URL
 parsing, and single-page HTTP downloading. Phase 4 now provides standalone HTML
 anchor extraction. Phase 5 adds a reusable FIFO URL/depth queue and normalized
 visited-URL set. Phase 6 integrates these modules into a bounded,
-single-threaded BFS crawler; document downloading and Phase 7 are NOT started.
+single-threaded BFS crawler. Phase 7 validates/hardens the original crawler;
+future document discovery/downloading is NOT implemented.
 
 ## Build on Linux / Replit
 
@@ -67,7 +68,7 @@ The pipeline demo calls the Part 1 API, then demonstrates URL parsing and the st
 
 ## Remaining work
 
-Phase 7 final validation/hardening and future document downloads,
+Future DeepDownload document discovery/downloads,
 deduplication, provenance and reporting remain future work. See
 `documentation/progress.md` and `documentation/architecture.md`.
 
@@ -141,9 +142,11 @@ entire website or the Internet was exhaustively crawled.
 `same_domain=1` pins the exact canonical seed hostname, not subdomains.
 **Both modes pin the effective seed port**, so removing a nondefault port
 cannot silently select another local service. Mode 0 permits other hosts on
-that port. Redirect final URLs are checked AFTER download: off-scope bodies
-and links are not parsed, but their network fetch may already have occurred.
-This is NOT a network firewall/SSRF defense or automatic robots-policy engine.
+that port. Phase 7 checks every redirect URL BEFORE its request through the
+additive scoped downloader (maximum five hops). Blocked host/port targets are
+not fetched. HTTPS->HTTP downgrade is also refused. Standalone `http_download`
+retains automatic redirects for callers that explicitly use that API.
+This is NOT an IP/DNS firewall, SSRF defense or automatic robots-policy engine.
 Use only controlled/permissioned sites under their owner's policy; no bypass
 of logins, CAPTCHA, blocks or restrictions is implemented.
 
@@ -171,5 +174,29 @@ pipeline also performs a separate standalone download, so it is not an
 exact-once BFS demonstration. The controlled launcher requires POSIX and
 prints SKIP on native Windows; native Windows execution is NOT VERIFIED.
 
-**NO PHASE 7 STARTED.** Further work needs explicit approval and UI-mode
-confirmation; no mode/configuration change or deployment accompanies Phase 6.
+## Phase 7 hardening and final validation
+
+Supported timeout for both HTTP and crawler APIs is **1..3600 seconds**.
+Zero/negative/LONG_MAX/3601 are rejected before networking; essential curl
+option failures abort setup. The scoped API uses this timeout per individual
+transfer; up to six transfers (five redirects) can occur per logical page.
+There is no whole-crawl wall-clock timer. CLI timeout remains 3 seconds.
+
+```sh
+make test-phase7-safety
+make test-phase7-alloc
+```
+
+Both join `make test`. The public four-field config/five-field stats and
+existing signatures remain source-compatible. HTTP_ERR_SCOPE is appended;
+root scope rejection maps to PARSE_ERROR, child rejection to eventual PARTIAL.
+Existing stats keep their Phase 6 definitions; blocked targets no longer
+contribute bytes because they are never fetched.
+
+See [decisions/fixes](prompt%20history/2026-11-09-phase7-decisions-and-fixes.md)
+and [current validation/handoff](prompt%20history/2026-11-09-phase7-acceptance-and-handoff.md).
+Earlier Phase 6 history records describe the old post-fetch policy and are
+intentionally preserved, not silently rewritten.
+
+**NO PHASE 8 OR LATER PHASE STARTED.** Further DeepDownload features require
+explicit approval. No mode/configuration change, paid upgrade or deployment.

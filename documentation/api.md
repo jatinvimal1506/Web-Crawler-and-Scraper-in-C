@@ -1,5 +1,34 @@
 # Public API
 
+## Current Phase 7 safety contract
+
+Both `http_download` and `crawler_run` accept timeout **1..3600 inclusive**;
+unsupported values return INVALID_ARGUMENT before any network request.
+All curl options are checked before perform: timeouts, follow flag, protocols,
+five-hop cap, explicit TLS peer/host verification and response size limits.
+Failed option setup returns HTTP_ERR_INIT; OOM remains OUT_OF_MEMORY.
+
+Additive `http_download_scoped(url, timeout, seed_url, same_domain, response)`
+borrows inputs, uses existing URL parsing/resolution and follows
+301/302/303/307/308 in a bounded C loop. Each Location is resolved against the
+actual response final_url and validated BEFORE requesting it. Both modes pin
+seed effective port; strict mode also pins exact canonical hostname.
+HTTPS->HTTP is blocked; same-port HTTP->HTTPS keeps TLS verification.
+Timeout is per hop, not one shared deadline for the whole redirect chain.
+
+HTTP_ERR_SCOPE is appended without renumbering earlier HTTP statuses; maps to
+CRAWLER_PARSE_ERROR at root, or failed child/eventual PARTIAL. Metadata describes
+the last fetched hop, never an unrequested blocked URL. Malformed/missing/
+unsupported Location uses HTTP_ERR_HTTP_STATUS; excessive hops/loops use
+HTTP_ERR_TOO_MANY_REDIRECTS; partial transport uses HTTP_ERR_NETWORK.
+Scoped OOM empties all owned response fields; always use http_response_free.
+Standalone automatic redirects remain supported. This is NOT IP/DNS-rebinding,
+robots or authorization enforcement. Existing config/stat layouts are unchanged.
+
+The Phase 6 sections below describe retained APIs. Their historical post-fetch
+scope policy is superseded by
+`../prompt history/2026-11-09-phase7-decisions-and-fixes.md`.
+
 ## Part 1 crawler API
 
 `include/project.h` declares `crawler_run(config, stats)`. It zeroes available

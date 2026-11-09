@@ -19,7 +19,7 @@ extern "C" {
 /* Why a download succeeded or failed. */
 typedef enum {
     HTTP_OK = 0,                  /* got a 2xx answer with an HTML body       */
-    HTTP_ERR_INVALID_ARGUMENT,    /* NULL/empty url, NULL response, timeout<=0 */
+    HTTP_ERR_INVALID_ARGUMENT,    /* NULL/empty url/response, timeout outside 1..3600 */
     HTTP_ERR_BAD_URL,             /* url_parse() (Part 2) rejected the URL     */
     HTTP_ERR_OUT_OF_MEMORY,       /* malloc/realloc failed                     */
     HTTP_ERR_INIT,                /* libcurl could not start                   */
@@ -31,11 +31,13 @@ typedef enum {
     HTTP_ERR_HTTP_STATUS,         /* server answered 3xx(no target)/4xx/5xx    */
     HTTP_ERR_TOO_LARGE,           /* page bigger than HTTP_MAX_BODY_BYTES      */
     HTTP_ERR_NOT_HTML,            /* Content-Type says image/pdf/json/etc.     */
-    HTTP_ERR_NETWORK              /* any other network failure                 */
+    HTTP_ERR_NETWORK,             /* any other network failure                 */
+    HTTP_ERR_SCOPE               /* scoped target refused BEFORE request      */
 } HttpStatus;
 
 /* Pages larger than this are refused (protects memory). 5 MB. */
 #define HTTP_MAX_BODY_BYTES ((size_t)5 * 1024 * 1024)
+#define HTTP_MAX_TIMEOUT_SECONDS 3600L
 
 /*
  * Everything we learned from one download.
@@ -65,12 +67,21 @@ typedef struct {
 /*
  * Download one page.
  *   url             absolute http:// or https:// URL (checked with url_parse)
- *   timeout_seconds must be > 0; use CrawlerConfig.timeout_seconds
+ *   timeout_seconds must be 1..HTTP_MAX_TIMEOUT_SECONDS (3600), inclusive
  *   response        filled in; see HttpResponse
  * Returns HTTP_OK or the reason for failure.
  */
 HttpStatus http_download(const char *url, long timeout_seconds,
                          HttpResponse *response);
+
+/* Additive crawler transport: validate initial URL and each redirect BEFORE
+ * transfer, exact seed host if same_domain=1, effective seed port in both
+ * modes. Five redirects maximum; timeout is per hop. HTTPS->HTTP is refused.
+ * seed_url and url are borrowed absolute HTTP(S) URLs. Same response ownership
+ * as http_download. This is URL scope, NOT IP/DNS/SSRF/robots enforcement. */
+HttpStatus http_download_scoped(const char *url, long timeout_seconds,
+                               const char *seed_url, int same_domain,
+                               HttpResponse *response);
 
 /* Free everything inside response and reset it. NULL is allowed. */
 void http_response_free(HttpResponse *response);

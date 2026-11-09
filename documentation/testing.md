@@ -15,7 +15,12 @@ make test-crawler-engine
 make test-crawler-alloc
 ```
 
-`make` also builds the pipeline demo. Run `.\build\demo_pipeline.exe` for the default URL or pass a URL argument. The Part 1 test checks invalid arguments, statistics initialization, status messages, and the valid not-implemented response. The URL suite checks normal HTTP/HTTPS parsing, each parsed component, status values, host and port validation, URL-size and DNS label/hostname boundaries, query and fragment handling, normalization, reference resolution, output state on errors, repeated cleanup, and the previously failing resolution/trailing-slash cases.
+`make` also builds the retained pipeline demo and the real `crawler-bfs` CLI.
+The basic API test checks invalid arguments, statistics initialization/statuses
+and CRAWLER_OK on a controlled empty HTML page from a C stub (NOT the former
+NOT_IMPLEMENTED result). The URL suite retains parsing/normalization/resolution,
+boundaries and ownership regressions. Use the controlled C fixture below for
+the current demo, not an unpermissioned public-site crawl.
 
 `make test` includes the original API/URL tests, standalone HTML tests, local
 HTTP fixtures, Phase 5 tests, HTTP metadata allocation-failure tests and original live HTTP
@@ -41,12 +46,16 @@ SKIP on native Windows. Windows runtime and older-libcurl fallback execution
 are not verified here. An old MSYS2 report of unavailable libasan is historical,
 not evidence about the current Linux toolchain.
 
-Current Linux ASan/UBSan commands and measured results are in
-`phase4-test-results.md`. LeakSanitizer is restricted in this environment;
-allocation accounting is not a complete leak scan. There is no comprehensive
+Historical Phase 4 results remain in `phase4-test-results.md`. Current Phase 7
+commands/results are in `../prompt history/2026-11-09-phase7-acceptance-and-handoff.md`.
+LeakSanitizer availability can vary: isolated runs have passed while a full
+sweep has failed with ptrace restrictions. Report each actual command/result;
+neither blanket success nor universal unavailability is justified.
+Allocation accounting is not a complete process leak scan. There is no comprehensive
 HTML5 parser, fuzzing campaign, or deterministic local TLS fixture.
 
-Phases 1–6 are implemented, including bounded BFS. No Phase 7 is started.
+Phases 1–7 cover the original crawler. Phase 7 hardens timeout and redirect
+safety and validates it; it does NOT implement future document features.
 
 ## Phase 5 tests
 
@@ -106,3 +115,58 @@ This starts the controlled local site and runs the real BFS CLI. It is not a
 fabricated transcript. See the Phase 6 handoff for exact observed output,
 commands/exits/counts and sanitizer flags. No test-only hooks are in release
 artifacts, no new dependencies are installed, and no UI/browser is involved.
+
+## Phase 7 safety and allocation targets
+
+```sh
+make test-phase7-safety
+make test-phase7-alloc
+```
+
+Both are included in `make test`. The three old Phase 6 expectations that
+accepted a network fetch to a blocked redirect target now require ZERO such
+requests (intentional policy correction); all other scenarios are retained.
+
+`test_phase7_safety.c` tests timeout 0/-1/LONG_MAX/3601 rejection with no
+server requests; 1/3/3600 success; failures of 17 essential curl options before
+networking; option OOM; 301/302/303/307/308; relative/query/fragment/scheme-relative
+Location; exactly five and excessive/looping redirects; absent/invalid/duplicate/
+unsupported Location; redirected 404/500/PDF; partial body and timeout cleanup;
+cross-host open/strict and cross-port blocking; recoverable child scope rejection;
+cross-page candidate and redirect-alias scheduled-key budgets. Standalone
+automatic redirects retain old behavior. No public site is needed.
+
+`test_phase7_alloc.c` instruments all seven production modules and fails each
+application allocation in real scoped success, blocked-target, loop and actual
+redirecting BFS profiles. It verifies OOM propagation, empty OOM output and
+zero tracked allocations after cleanup/retry. An explicitly fake single-hop
+test proves same-port HTTP->HTTPS URL policy and HTTPS downgrade rejection:
+it is NOT a TLS handshake/certificate fixture. Native TLS remains verified
+by existing settings/live tests only; deterministic local TLS is NOT VERIFIED.
+
+Test-only option/allocator/transfer hooks are separate objects, never release
+archive members. This adds no production allocator controls or CLI flags.
+
+## Windows/MSYS2 UCRT64 (native execution NOT VERIFIED here)
+
+In the MSYS2 **UCRT64** terminal, install the normal free C dependencies if needed:
+
+```sh
+pacman -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-curl make git
+cd /c/path/to/Web-Crawler-and-Scraper-in-C
+make clean
+make
+make test
+make test-phase5-alloc
+make test-crawler-alloc
+make test-html-alloc
+./build/crawler-bfs.exe http://YOUR_CONTROLLED_HOST:PORT/ 1 1
+```
+
+The Makefile retains cmd.exe /C, .exe and native cleanup branches. If using
+cmd.exe directly, use `build\\crawler-bfs.exe` and ensure UCRT64/bin and MSYS2
+make are on PATH. Link against UCRT64 libcurl, not a mismatched MINGW64 package.
+POSIX fork/socket targets explicitly print SKIP on native Windows; portable
+API/URL/HTML/queue/visited/in-memory engine tests remain. A successful Makefile
+dry-run is NOT Windows runtime evidence. Windows allocator/linker wrapping and
+native sanitizer runtime availability must still be checked on a real target.

@@ -30,8 +30,8 @@ int main(int argc, char **argv)
     }
     config.start_url = argv[1];
     if (argc == 4) { config.same_domain = argv[3][0] - '0'; }
-    puts("DeepDownload-C Phase 6: bounded single-threaded BFS (no file downloads)");
-    puts("Use only controlled/permissioned sites. Port pinned; redirects checked after download.");
+    puts("DeepDownload-C Phase 7: validated single-threaded BFS (no file downloads)");
+    puts("Use only controlled/permissioned sites. Port pinned; redirects checked before each request.");
     status = crawler_run(&config, &stats);
     printf("Status: %s\nPages visited: %zu\nPages failed: %zu\n"
            "Links discovered: %zu\nMaximum depth attempted: %zu\nBytes downloaded: %zu\n",

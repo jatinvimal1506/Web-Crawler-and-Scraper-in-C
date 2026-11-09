@@ -84,6 +84,12 @@ static unsigned route_id(const char *path)
         path[consumed] == '\0' && number <= 150) {
         return FIX_CHAIN_BASE + number;
     }
+    if (strcmp(path, "/safety/dest?x=one&y=two") == 0) { return FIX_SAFETY_BASE + 40; }
+    consumed = 0;
+    if (sscanf(path, "/safety/%u%n", &number, &consumed) == 1 &&
+        path[consumed] == '\0' && number <= 40) {
+        return FIX_SAFETY_BASE + number;
+    }
     return FIX_MISSING;
 }
 
@@ -91,6 +97,35 @@ static size_t build_body(unsigned id, char *body, size_t capacity)
 {
     const char *text = "";
     int written;
+    if (id == FIX_SAFETY_BASE + 26) {
+        memcpy(body, "<a", 3);
+        return 2;
+    }
+    if (id == FIX_SAFETY_BASE + 29) {
+        text = "<a href='/off-redirect'>blocked</a><a href='/ok'>ok</a>";
+        memcpy(body, text, strlen(text) + 1);
+        return strlen(text);
+    }
+    if (id == FIX_SAFETY_BASE + 31) {
+        text = "<a href='/ok'>one</a><a href='/ok#two'>two</a>";
+        memcpy(body, text, strlen(text) + 1);
+        return strlen(text);
+    }
+    if (id == FIX_SAFETY_BASE + 30 || id == FIX_SAFETY_BASE + 32) {
+        size_t used = 0, i;
+        for (i = 0; i < 999; ++i) {
+            if (id == FIX_SAFETY_BASE + 30) {
+                written = snprintf(body + used, capacity - used, "<a href='/safety/31'>x</a>");
+            } else if (i == 0) {
+                written = snprintf(body + used, capacity - used, "<a href='/redirect'>x</a>");
+            } else {
+                written = snprintf(body + used, capacity - used, "<a href='/p/%zu'>x</a>", i - 1);
+            }
+            require(written >= 0 && (size_t)written < capacity - used);
+            used += (size_t)written;
+        }
+        return used;
+    }
     switch (id) {
     case FIX_SITE: text = root; break;
     case FIX_A: text = "<a href='g'>grand</a><a href='/b'>duplicate</a>"; break;
@@ -215,9 +250,47 @@ static void serve(int fd, unsigned id)
         status = 302;
         size = 0;
     }
+    if (id >= FIX_SAFETY_BASE && id <= FIX_SAFETY_BASE + 25) {
+        unsigned n = id - FIX_SAFETY_BASE;
+        const char *target = NULL;
+        status = 302;
+        if (n <= 4) {
+            static const int codes[] = {301, 302, 303, 307, 308};
+            status = codes[n];
+            target = "/new/page";
+        } else if (n == 5) { target = "dest?x=one&y=two#fragment"; }
+        else if (n == 6) { target = "/ok#fragment"; }
+        else if (n == 7) { target = "/safety/7"; }
+        else if (n >= 8 && n <= 14) {
+            (void)snprintf(location, sizeof(location), "Location: /safety/%u\r\n", n + 1);
+        } else if (n == 15) { status = 200; }
+        else if (n == 16) { /* intentionally no Location */ }
+        else if (n == 17) { target = "http:// bad.invalid/"; }
+        else if (n == 18) { target = "file:///tmp/forbidden"; }
+        else if (n == 19) { target = "data:text/html,forbidden"; }
+        else if (n == 20) {
+            (void)snprintf(location, sizeof(location), "Location: //localhost:%u/ok\r\n", port);
+        } else if (n == 21) {
+            (void)snprintf(location, sizeof(location), "Location: /ok\r\nLocation: /new/page\r\n");
+        } else if (n == 22) { target = "ftp://127.0.0.1/file"; }
+        else if (n == 23) { target = "/missing"; }
+        else if (n == 24) { target = "/boom"; }
+        else if (n == 25) { target = "/pdf"; }
+        if (target != NULL) {
+            (void)snprintf(location, sizeof(location), "Location: %s\r\n", target);
+        }
+        size = 0;
+    }
+    if (id >= FIX_SAFETY_BASE + 33 && id <= FIX_SAFETY_BASE + 37) {
+        status = 302;
+        (void)snprintf(location, sizeof(location), "Location: /safety/%u\r\n",
+                       id - FIX_SAFETY_BASE + 1);
+        size = 0;
+    }
     written = snprintf(header, sizeof(header),
         "HTTP/1.1 %d Fixture\r\nContent-Type: %s\r\n%s"
-        "Content-Length: %zu\r\nConnection: close\r\n\r\n", status, type, location, size);
+        "Content-Length: %zu\r\nConnection: close\r\n\r\n", status, type, location,
+        id == FIX_SAFETY_BASE + 26 ? size + 20 : size);
     require(written > 0 && (size_t)written < sizeof(header));
     if (send_all(fd, header, (size_t)written)) { (void)send_all(fd, body, size); }
 }

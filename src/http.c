@@ -8,12 +8,14 @@
 
 #include "http.h"
 #include "url.h"
+#include "http_internal.h"
 
 #include <curl/curl.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 /* Track whether libcurl global initialization has been performed. */
 static int s_curl_initialized = 0;
@@ -53,11 +55,16 @@ typedef struct {
  */
 static size_t http_write_callback(void *contents, size_t size, size_t nmemb, void *userp)
 {
-    size_t bytes = size * nmemb;
     BodyBuffer *buf = (BodyBuffer *)userp;
+    size_t bytes;
+    if (size != 0 && nmemb > SIZE_MAX / size) {
+        buf->too_large = 1;
+        return 0;
+    }
+    bytes = size * nmemb;
 
     /* Enforce project body size limit (5 MB) */
-    if (buf->size + bytes > HTTP_MAX_BODY_BYTES) {
+    if (bytes > HTTP_MAX_BODY_BYTES - buf->size) {
         buf->too_large = 1;
         return 0; /* Aborting returns CURLE_WRITE_ERROR */
     }
@@ -83,6 +90,63 @@ static size_t http_write_callback(void *contents, size_t size, size_t nmemb, voi
 
     return bytes;
 }
+
+/* Fixed bounded header storage avoids reallocating in the header callback.
+ * Reset on status lines (e.g. proxy CONNECT or interim 100 response). */
+typedef struct {
+    char text[2049];
+    int seen;
+    int invalid;
+} LocationHeader;
+
+static size_t location_header(char *data, size_t size, size_t count, void *user)
+{
+    LocationHeader *header = user;
+    size_t bytes, start, end, i;
+    static const char key[] = "location:";
+    if (size != 0 && count > SIZE_MAX / size) { return 0; }
+    bytes = size * count;
+    if (bytes >= 5 && memcmp(data, "HTTP/", 5) == 0) {
+        *header = (LocationHeader){0};
+    }
+    if (bytes < sizeof(key) - 1) { return bytes; }
+    for (i = 0; i < sizeof(key) - 1; ++i) {
+        if (tolower((unsigned char)data[i]) != key[i]) { return bytes; }
+    }
+    start = sizeof(key) - 1;
+    end = bytes;
+    while (start < end && (data[start] == ' ' || data[start] == '\t')) { ++start; }
+    while (end > start && (data[end - 1] == '\r' || data[end - 1] == '\n' ||
+           data[end - 1] == ' ' || data[end - 1] == '\t')) { --end; }
+    if (header->seen || end == start || end - start >= sizeof(header->text) ||
+        memchr(data + start, '\0', end - start) != NULL) {
+        header->invalid = 1;
+        return 0; /* Fail closed on ambiguous/oversized Location. */
+    }
+    memcpy(header->text, data + start, end - start);
+    header->text[end - start] = '\0';
+    header->seen = 1;
+    return bytes;
+}
+
+/* Test builds can force an option result without unsafe variadic forwarding.
+ * No hook reference or code is compiled into the release object. */
+#ifdef HTTP_OPTION_TEST
+extern CURLcode http_test_option_result(CURLoption option);
+#define OPTION_RESULT(option) http_test_option_result(option)
+#else
+#define OPTION_RESULT(option) CURLE_OK
+#endif
+#define SET_OPTION(option, value) do { \
+    CURLcode setting = OPTION_RESULT(option); \
+    if (setting == CURLE_OK) { setting = curl_easy_setopt(curl, option, value); } \
+    if (setting != CURLE_OK) { \
+        snprintf(response->detail, sizeof(response->detail), \
+                 "Cannot configure %s: %.160s", #option, curl_easy_strerror(setting)); \
+        curl_easy_cleanup(curl); \
+        return setting == CURLE_OUT_OF_MEMORY ? HTTP_ERR_OUT_OF_MEMORY : HTTP_ERR_INIT; \
+    } \
+} while (0)
 
 /*
  * Compare the entire media-type token, not a substring or a parameter value.
@@ -169,15 +233,14 @@ static int is_body_html_heuristic(const char *body, size_t size)
 /*
  * Ensure libcurl's global state is initialized.
  */
-static int ensure_curl_initialized(void)
+static CURLcode ensure_curl_initialized(void)
 {
     if (!s_curl_initialized) {
-        if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
-            return -1;
-        }
+        CURLcode result = curl_global_init(CURL_GLOBAL_DEFAULT);
+        if (result != CURLE_OK) { return result; }
         s_curl_initialized = 1;
     }
-    return 0;
+    return CURLE_OK;
 }
 
 /*
@@ -220,6 +283,8 @@ const char *http_status_string(HttpStatus status)
     switch (status) {
     case HTTP_OK:
         return "success";
+    case HTTP_ERR_SCOPE:
+        return "URL/redirect outside permitted scope";
     case HTTP_ERR_INVALID_ARGUMENT:
         return "invalid argument";
     case HTTP_ERR_BAD_URL:
@@ -265,6 +330,7 @@ CrawlerStatus http_to_crawler_status(HttpStatus status)
     case HTTP_ERR_OUT_OF_MEMORY:
         return CRAWLER_OUT_OF_MEMORY;
     case HTTP_ERR_NOT_HTML:
+    case HTTP_ERR_SCOPE:
         return CRAWLER_PARSE_ERROR;
     case HTTP_ERR_INIT:
     case HTTP_ERR_DNS:
@@ -283,8 +349,8 @@ CrawlerStatus http_to_crawler_status(HttpStatus status)
 /*
  * Download one page using libcurl.
  */
-HttpStatus http_download(const char *url, long timeout_seconds,
-                         HttpResponse *response)
+static HttpStatus download_request(const char *url, long timeout_seconds,
+                                  HttpResponse *response, char **location)
 {
     /* STEP 1: Validate argument pointers and bounds. */
     if (response == NULL) {
@@ -293,12 +359,14 @@ HttpStatus http_download(const char *url, long timeout_seconds,
 
     /* Initialize response to a zeroed state. */
     *response = (HttpResponse){0};
+    if (location != NULL) { *location = NULL; }
 
-    if (url == NULL || *url == '\0' || timeout_seconds <= 0) {
+    if (url == NULL || *url == '\0' || timeout_seconds <= 0 ||
+        timeout_seconds > HTTP_MAX_TIMEOUT_SECONDS) {
         snprintf(response->detail, sizeof(response->detail),
                  "Invalid argument: %s",
                  url == NULL ? "url is NULL" :
-                 (*url == '\0' ? "url is empty" : "timeout_seconds must be > 0"));
+                 (*url == '\0' ? "url is empty" : "timeout_seconds must be 1..3600"));
         return HTTP_ERR_INVALID_ARGUMENT;
     }
 
@@ -309,68 +377,67 @@ HttpStatus http_download(const char *url, long timeout_seconds,
         snprintf(response->detail, sizeof(response->detail),
                  "URL rejected by url_parse (%s): %.150s",
                  url_status_message(url_status), url);
-        return HTTP_ERR_BAD_URL;
+        return url_status == URL_ERROR_OUT_OF_MEMORY
+            ? HTTP_ERR_OUT_OF_MEMORY : HTTP_ERR_BAD_URL;
     }
     url_free(&parsed);
 
     /* STEP 3: Initialize libcurl global and easy session. */
-    if (ensure_curl_initialized() != 0) {
+    CURLcode initialized = ensure_curl_initialized();
+    if (initialized != CURLE_OK) {
         snprintf(response->detail, sizeof(response->detail),
                  "libcurl global initialization failed");
-        return HTTP_ERR_INIT;
+        return initialized == CURLE_OUT_OF_MEMORY ? HTTP_ERR_OUT_OF_MEMORY : HTTP_ERR_INIT;
     }
 
     CURL *curl = curl_easy_init();
     if (curl == NULL) {
         snprintf(response->detail, sizeof(response->detail),
                  "libcurl easy session creation failed");
-        return HTTP_ERR_INIT;
+        return HTTP_ERR_OUT_OF_MEMORY;
     }
 
     /* STEP 4: Configure download options. */
     char errbuf[CURL_ERROR_SIZE] = {0};
     BodyBuffer buf = {0};
+    LocationHeader header = {0};
 
     /* Restrict BOTH the initial request and every redirect. Fail closed if
      * libcurl cannot apply the policy. Keep default TLS verification enabled.
      * String options arrived in 7.85.0; retain older MSYS2 curl compatibility. */
-    CURLcode protocol_status;
 #if LIBCURL_VERSION_NUM >= 0x075500
-    protocol_status = curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "http,https");
-    if (protocol_status == CURLE_OK) {
-        protocol_status = curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR,
-                                          "http,https");
-    }
+    SET_OPTION(CURLOPT_PROTOCOLS_STR, "http,https");
+    SET_OPTION(CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
 #else
-    protocol_status = curl_easy_setopt(curl, CURLOPT_PROTOCOLS,
-                                      (long)(CURLPROTO_HTTP | CURLPROTO_HTTPS));
-    if (protocol_status == CURLE_OK) {
-        protocol_status = curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS,
-                                          (long)(CURLPROTO_HTTP | CURLPROTO_HTTPS));
-    }
+    SET_OPTION(CURLOPT_PROTOCOLS, (long)(CURLPROTO_HTTP | CURLPROTO_HTTPS));
+    SET_OPTION(CURLOPT_REDIR_PROTOCOLS, (long)(CURLPROTO_HTTP | CURLPROTO_HTTPS));
 #endif
-    if (protocol_status != CURLE_OK) {
-        snprintf(response->detail, sizeof(response->detail),
-                 "Cannot restrict HTTP protocols: %.180s",
-                 curl_easy_strerror(protocol_status));
-        curl_easy_cleanup(curl);
-        return HTTP_ERR_INIT;
+    SET_OPTION(CURLOPT_URL, url);
+    SET_OPTION(CURLOPT_FOLLOWLOCATION, location == NULL ? 1L : 0L);
+    SET_OPTION(CURLOPT_MAXREDIRS, 5L);
+    SET_OPTION(CURLOPT_TIMEOUT, timeout_seconds);
+    SET_OPTION(CURLOPT_CONNECTTIMEOUT, timeout_seconds);
+    SET_OPTION(CURLOPT_SSL_VERIFYPEER, 1L);
+    SET_OPTION(CURLOPT_SSL_VERIFYHOST, 2L);
+    SET_OPTION(CURLOPT_WRITEFUNCTION, http_write_callback);
+    SET_OPTION(CURLOPT_WRITEDATA, &buf);
+    SET_OPTION(CURLOPT_ERRORBUFFER, errbuf);
+    SET_OPTION(CURLOPT_USERAGENT, "WebCrawler/1.0 (+https://github.com/jatinvimal1506/Web-Crawler-and-Scraper-in-C)");
+    SET_OPTION(CURLOPT_MAXFILESIZE_LARGE, (curl_off_t)HTTP_MAX_BODY_BYTES);
+    SET_OPTION(CURLOPT_NOSIGNAL, 1L);
+    if (location != NULL) {
+        SET_OPTION(CURLOPT_HEADERFUNCTION, location_header);
+        SET_OPTION(CURLOPT_HEADERDATA, &header);
     }
-
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout_seconds);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, timeout_seconds);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, http_write_callback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buf);
-    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "WebCrawler/1.0 (+https://github.com/jatinvimal1506/Web-Crawler-and-Scraper-in-C)");
-    curl_easy_setopt(curl, CURLOPT_MAXFILESIZE_LARGE, (curl_off_t)HTTP_MAX_BODY_BYTES);
-    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 
     /* STEP 5: Perform the HTTP request. */
     CURLcode res = curl_easy_perform(curl);
+    if (header.invalid) {
+        free(buf.data);
+        curl_easy_cleanup(curl);
+        snprintf(response->detail, sizeof(response->detail), "Invalid/ambiguous Location header");
+        return HTTP_ERR_HTTP_STATUS;
+    }
 
     /* STEP 6: Capture metadata (final URL, HTTP status code, Content-Type). */
     char *effective_url = NULL;
@@ -391,6 +458,10 @@ HttpStatus http_download(const char *url, long timeout_seconds,
         if (response->content_type == NULL) {
             goto metadata_oom;
         }
+    }
+    if (location != NULL && header.seen) {
+        *location = copy_string(header.text);
+        if (*location == NULL) { goto metadata_oom; }
     }
 
     /* STEP 7: Check transfer outcome and map errors. */
@@ -517,9 +588,22 @@ metadata_oom:
     /* Nothing from a partially copied response is delivered as success.
      * buf owns the body until STEP 10; response owns any copied metadata. */
     free(buf.data);
+    if (location != NULL) { free(*location); *location = NULL; }
     http_response_free(response);
     curl_easy_cleanup(curl);
     snprintf(response->detail, sizeof(response->detail),
              "Out of memory copying HTTP response metadata");
     return HTTP_ERR_OUT_OF_MEMORY;
+}
+
+HttpStatus http_download(const char *url, long timeout_seconds, HttpResponse *response)
+{
+    return download_request(url, timeout_seconds, response, NULL);
+}
+
+HttpStatus http_download_once(const char *url, long timeout_seconds,
+                             HttpResponse *response, char **location)
+{
+    if (location == NULL) { return HTTP_ERR_INVALID_ARGUMENT; }
+    return download_request(url, timeout_seconds, response, location);
 }

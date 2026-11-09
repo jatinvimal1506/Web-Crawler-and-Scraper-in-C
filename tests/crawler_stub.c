@@ -9,6 +9,16 @@
 int crawler_stub_mode;
 size_t crawler_stub_calls;
 
+/* The basic API/engine fault tests stay portable and entirely in-memory.
+ * The real scoped transport has separate local + allocation test targets. */
+HttpStatus http_download_scoped(const char *url, long timeout,
+                               const char *seed, int same_domain, HttpResponse *response)
+{
+    (void)seed;
+    (void)same_domain;
+    return http_download(url, timeout, response);
+}
+
 static char *copy_text(const char *text)
 {
     size_t size = strlen(text) + 1;

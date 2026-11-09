@@ -11,6 +11,7 @@ enum {
     FIX_FAILED_ALIAS, FIX_FAILED_REDIRECT, FIX_NUL_ALIAS, FIX_NUL_REDIRECT
 };
 #define FIX_CHAIN_BASE 1000U
+#define FIX_SAFETY_BASE 100U
 #define FIX_LOCALHOST_BIT 0x80000000U
 unsigned crawler_fixture_start(void);
 void crawler_fixture_stop(void);

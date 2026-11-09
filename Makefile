@@ -5,7 +5,7 @@ CFLAGS += -std=c11 -Wall -Wextra -Wpedantic -Iinclude
 LDLIBS ?= -lcurl
 BUILD := build
 LIB := $(BUILD)/libcrawler.a
-SOURCES := src/project.c src/url.c src/http.c src/html.c src/queue.c src/visited.c
+SOURCES := src/project.c src/url.c src/http.c src/http_scoped.c src/html.c src/queue.c src/visited.c
 OBJECTS := $(SOURCES:src/%.c=$(BUILD)/%.o)
 # Retain native cmd.exe behavior on Windows; use POSIX commands on Linux.
 ifeq ($(OS),Windows_NT)
@@ -31,12 +31,14 @@ HTTP_ALLOC_TEST := $(BUILD)/test-http-alloc$(EXE)
 QUEUE_TEST := $(BUILD)/test-queue$(EXE)
 VISITED_TEST := $(BUILD)/test-visited$(EXE)
 PHASE5_ALLOC_TEST := $(BUILD)/test-phase5-alloc$(EXE)
+SAFETY_TEST := $(BUILD)/test-phase7-safety$(EXE)
+PHASE7_ALLOC_TEST := $(BUILD)/test-phase7-alloc$(EXE)
 CRAWLER_ALLOC_TEST := $(BUILD)/test-crawler-alloc$(EXE)
 CRAWLER_ENGINE_TEST := $(BUILD)/test-crawler-engine$(EXE)
 TEST_HEADERS := tests/phase5_check.h
-HEADERS := $(wildcard include/*.h)
+HEADERS := $(wildcard include/*.h) src/http_internal.h
 
-.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local test-http-alloc test-phase5 test-phase5-alloc test-crawler-engine test-crawler-alloc
+.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local test-http-alloc test-phase5 test-phase5-alloc test-crawler-engine test-crawler-alloc test-phase7-safety test-phase7-alloc
 all: $(LIB) $(DEMO) $(PIPELINE_DEMO) $(BFS_DEMO)
 
 $(BUILD):
@@ -135,7 +137,7 @@ test-crawler-alloc: $(CRAWLER_ALLOC_TEST)
 
 # Unit tests need no sockets. Local fixtures need loopback, not Internet access.
 # The original HTTP suite still uses public network endpoints.
-test: test-unit test-phase5-alloc test-crawler-engine test-crawler-alloc test-http-local test-http-alloc test-http
+test: test-unit test-phase5-alloc test-crawler-engine test-crawler-alloc test-http-local test-http-alloc test-phase7-safety test-phase7-alloc test-http
 
 test-unit: $(TEST) $(URL_TEST) $(HTML_TEST) test-phase5
 	$(RUN)test-crawler$(EXE)
@@ -153,6 +155,30 @@ test-http-alloc: $(HTTP_ALLOC_TEST)
 
 test-html: $(HTML_TEST)
 	$(RUN)test-html$(EXE)
+
+$(BUILD)/http-option-test.o: src/http.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) -DHTTP_OPTION_TEST -c $< -o $@
+
+$(SAFETY_TEST): tests/test_phase7_safety.c tests/crawler_fixture.c tests/crawler_fixture.h $(BUILD)/http-option-test.o $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) tests/test_phase7_safety.c tests/crawler_fixture.c $(BUILD)/http-option-test.o $(LIB) $(LDLIBS) -o $@
+
+test-phase7-safety: $(SAFETY_TEST)
+	$(RUN)test-phase7-safety$(EXE)
+
+PHASE7_NAMES := -Dmalloc=phase7_malloc -Dcalloc=phase7_calloc -Drealloc=phase7_realloc -Dfree=phase7_free
+PHASE7_OBJECTS := $(SOURCES:src/%.c=$(BUILD)/phase7-%.o)
+
+$(BUILD)/phase7-%.o: src/%.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) $(PHASE7_NAMES) -c $< -o $@
+
+$(BUILD)/phase7-http.o: src/http.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) $(PHASE7_NAMES) -Dhttp_download_once=phase7_real_once -c $< -o $@
+
+$(PHASE7_ALLOC_TEST): tests/test_phase7_alloc.c tests/crawler_fixture.c tests/crawler_fixture.h $(PHASE7_OBJECTS)
+	$(CC) $(CFLAGS) $(LDFLAGS) tests/test_phase7_alloc.c tests/crawler_fixture.c $(PHASE7_OBJECTS) $(LDLIBS) -o $@
+
+test-phase7-alloc: $(PHASE7_ALLOC_TEST)
+	$(RUN)test-phase7-alloc$(EXE)
 
 # Optional: requires a GNU-compatible linker (Linux or MSYS2).
 $(BUILD)/test-html-alloc$(EXE): tests/test_html_alloc.c src/html.c src/url.c $(HEADERS) | $(BUILD)
