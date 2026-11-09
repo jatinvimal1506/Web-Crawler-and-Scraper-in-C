@@ -75,7 +75,7 @@ crawler would exceed Phase 10.
 | Update current docs without rewriting old history | PASS | README, API, architecture, progress and testing docs were updated; old prompt-history entries were retained. |
 | Native Windows/MSYS2 compatibility | NOT VERIFIED | Makefile's Windows `cmd.exe`/`.exe` branch remains. Native Windows was unavailable; POSIX filesystem/injection targets contain explicit Windows SKIP branches. Junction/reparse behavior is not guaranteed. |
 | Full LeakSanitizer/Valgrind proof | NOT VERIFIED | Leak-enabled runs terminate with the environment's ptrace restriction. Valgrind is not installed. Allocation accounting and ASan/UBSan are not a universal leak proof. |
-| GitHub commit and upload | PENDING AT THIS HANDOFF DRAFT | The code/test work is not considered fully delivered until the safe commit/push attempt and remote SHA verification are recorded below. |
+| GitHub commit and upload | PASS | Implementation commit `937dbf4976e0144c880fa66d45a2c48a57a3af53` was pushed normally to `main`; `origin/main` and public GitHub `main` both verified at that SHA. |
 | Power/advanced mode and deployment | NOT CHANGED | No mode/configuration change, upgrade, publish or deployment was made. The user reported Free selected; the account UI selection cannot be independently inspected here. |
 
 ## Functions and memory in beginner terms
@@ -154,7 +154,15 @@ not code-test failures.
 
 ### GitHub receipt (complete after push)
 
-At the time this draft was written, the working branch was `main`, based on the
-verified Phase 9 receipt `b42ccaff650cc94a7db5ccf1f5c1e67d7ac1c8b6`. The Phase 10
-changes were not yet committed or pushed. Record the final commit, remote head,
-and one non-force push result here after verifying the remote has not diverged.
+The working branch was `main`, based on the verified Phase 9 receipt
+`b42ccaff650cc94a7db5ccf1f5c1e67d7ac1c8b6`. Before pushing, a fresh fetch
+confirmed remote `main` still equaled that parent. Phase 10 implementation
+commit `937dbf4976e0144c880fa66d45a2c48a57a3af53` was pushed once, without
+force, through the configured Replit secure GitHub proxy to
+<https://github.com/jatinvimal1506/Web-Crawler-and-Scraper-in-C.git>.
+Afterward, both `git fetch origin main` and a direct public
+`git ls-remote ... refs/heads/main` reported
+`937dbf4976e0144c880fa66d45a2c48a57a3af53`. Thus the Phase 10 code and master
+instruction are present on public `main`; no outer Replit scaffold or build
+output was included. This handoff is subsequently included in a
+documentation-only receipt commit.
