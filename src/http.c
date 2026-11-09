@@ -243,6 +243,13 @@ static CURLcode ensure_curl_initialized(void)
     return CURLE_OK;
 }
 
+HttpStatus http_prepare_curl(void)
+{
+    CURLcode result = ensure_curl_initialized();
+    if (result == CURLE_OK) { return HTTP_OK; }
+    return result == CURLE_OUT_OF_MEMORY ? HTTP_ERR_OUT_OF_MEMORY : HTTP_ERR_INIT;
+}
+
 /*
  * Release libcurl global resources at program exit.
  */

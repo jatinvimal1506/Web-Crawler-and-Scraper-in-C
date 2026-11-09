@@ -1,13 +1,11 @@
 # DeepDownload-C
 
-This university project remains a reusable C11 static library with separate CLI
-demonstration programs. Parts 1–3 provide the public crawler API, HTTP(S) URL
-parsing, and single-page HTTP downloading. Phase 4 now provides standalone HTML
-anchor extraction. Phase 5 adds a reusable FIFO URL/depth queue and normalized
-visited-URL set. Phase 6 integrates these modules into a bounded,
-single-threaded BFS crawler. Phase 7 hardens timeout/redirect safety. Phase 8
-uses that BFS to discover public PDF, DOCX and ZIP links and record their
-source pages. Binary files are never downloaded; Phases 9–12 remain pending.
+This university project is a reusable C11 static library with separate C CLI
+demos. Phases 1–8 provide the crawler, URL/HTTP/HTML modules, reusable queue
+and visited set, bounded BFS, and PDF/DOCX/ZIP link discovery with provenance.
+Phase 9 adds a separate, one-document binary streamer. Discovery still does
+not download every result. File organization, hashing, bulk reporting and
+orchestration in Phases 10–12 remain pending.
 
 ## Build on Linux / Replit
 
@@ -26,11 +24,14 @@ make test-http-alloc # adds deterministic HTTP metadata-copy OOM tests
 make test-document # URL-extension classification and API tests
 make test-document-integration # C-only local BFS/provenance tests
 make test-document-alloc # injected result/crawler allocation failures
+make test-download # downloader API, validation and scope-policy tests
+make test-download-integration # C-only local binary/redirect/filesystem tests
+make test-download-alloc # injected allocation and file-I/O failure tests
 make test        # includes local fixtures and original network-dependent tests
 ```
 
 Linux executables include `build/crawler-demo`, `build/demo_pipeline`,
-`build/crawler-bfs` and `build/discover-documents`.
+`build/crawler-bfs`, `build/discover-documents` and `build/download-document`.
 For a beginner explanation of the new functions, pointers, memory ownership,
 module integration and parsing limitations, see
 [`documentation/phase4.md`](documentation/phase4.md).
@@ -44,7 +45,10 @@ make
 make test
 ```
 
-The Makefile builds `build/libcrawler.a`, the existing `build/crawler-demo.exe`, the combined `build/demo_pipeline.exe`, and the test programs. Both demos link with libcurl.
+The Makefile builds `build/libcrawler.a`, the existing crawler demos,
+`build/discover-documents.exe`, `build/download-document.exe` and test programs.
+Native Windows execution is not verified here; POSIX loopback integration and
+fault-injection targets print SKIP on native Windows.
 
 Run the combined pipeline with the default URL or supply one:
 
@@ -74,9 +78,8 @@ separately; `crawler_run` itself already performs bounded BFS.
 
 ## Remaining work
 
-Binary document downloads (Phase 9), file organization/content hashing (Phase
-10), keyword/CSV reporting (Phase 11) and final integration (Phase 12) remain
-future work. See
+File organization/content hashing (Phase 10), keyword/CSV reporting (Phase 11)
+and final integration (Phase 12) remain future work. See
 `documentation/progress.md` and `documentation/architecture.md`.
 
 ## Phase 4: HTML hyperlink extraction
@@ -126,9 +129,9 @@ allocation and error behavior as of Phase 5. Current integration and failure
 contracts are in the Phase 6 documents linked below.
 
 The Markdown-only [prompt history](prompt%20history/2026-11-07-project-history.md)
-contains accessible historical requests, the complete Phase 5 order and the
-acceptance/evidence handoff. No document downloading, AI, GUI or parallelism
-is implemented.
+contains accessible historical requests and the complete Phase 5–9 orders and
+evidence handoffs. No AI, GUI, browser automation or parallel crawling is
+implemented.
 
 ## Phase 6: actual bounded BFS, controlled demonstration
 
@@ -205,8 +208,8 @@ and [current validation/handoff](prompt%20history/2026-11-09-phase7-acceptance-a
 Earlier Phase 6 history records describe the old post-fetch policy and are
 intentionally preserved, not silently rewritten.
 
-**NO PHASE 9 OR LATER PHASE STARTED.** Further DeepDownload features require
-fresh approval. No mode/configuration change, paid upgrade or deployment.
+**NO PHASE 10 OR LATER STARTED.** Further DeepDownload features require fresh
+approval. No mode/configuration change, paid upgrade or deployment.
 
 ## Phase 8: public-document link discovery and provenance
 
@@ -219,7 +222,9 @@ each normalized source-page URL plus its crawl depth once. Repeated links and
 fragment-only URL variants do not duplicate a record/source pair; meaningful
 query differences remain distinct.
 
-Document URLs are filtered out of the page queue and are never downloaded.
+`document_discover` filters recognized document URLs out of the page queue and
+does not download them. Phase 9 adds a separate single-URL operation; it does
+not automatically download every discovered record.
 Ordinary HTTP(S) links with other extensions remain normal crawler candidates.
 Results own their strings and arrays; callers initialize with `{0}` or
 `document_results_init`, read with the accessors, and release with
@@ -231,3 +236,45 @@ See `documentation/api.md`, `documentation/architecture.md`,
 Try the controlled local demonstration with `make build/crawler-fixture`,
 then `./build/crawler-fixture --documents`. It starts the C loopback fixture
 and runs `build/discover-documents`; no external site is contacted.
+
+## Phase 9: one-document binary streaming
+
+`include/download.h` and `src/download.c` provide
+`download_document(config, result)` for one recognized PDF, DOCX or ZIP URL.
+The extension is classified by the existing Phase 8 URL helper. The libcurl
+write callback streams exact bytes to a caller-selected file; it never builds a
+whole binary body in memory or treats it as a C string. The per-file cap is
+20 MiB: exactly 20 MiB is accepted, and any additional byte fails. PDF, DOCX
+and ZIP MIME types are checked; one `application/octet-stream` header is an
+explicit fallback, while missing, duplicate, HTML and unrelated types fail.
+MIME labels do not prove document structure.
+
+The caller supplies an existing output directory and a safe basename with the
+matching extension. Names are restricted to ASCII letters, digits, dot, dash
+and underscore, up to 128 bytes; paths, traversal, Windows device names and
+trailing dots/spaces are rejected. Exclusive file creation prevents overwrite.
+The file is visible during streaming (not atomically published); failed
+transfers remove only the file created by that call. A failed cleanup has a
+distinct status and preserves the path for diagnosis.
+
+Redirects are followed manually, at most five. Each HTTP(S) target is parsed
+and checked **before** its request. Both policy modes keep the seed's effective
+port; same-domain mode also requires the exact seed hostname. HTTPS downgrade
+is blocked and TLS verification remains enabled. This is not an IP/DNS
+firewall. The timeout is 1–3600 seconds per hop.
+
+```sh
+make build/download-document
+./build/download-document DOCUMENT_URL SEED_URL OUTPUT_DIRECTORY safe-name.pdf 1
+./build/download-document DOCUMENT_URL SEED_URL OUTPUT_DIRECTORY safe-name.pdf 1 3
+make test-download
+make test-download-integration
+make test-download-alloc
+```
+
+The CLI handles exactly one URL and prints its status, type, HTTP status, byte
+count, final URL and path. It does not organize files, hash content, interpret
+PDF/DOCX/ZIP internals, or bulk-download Phase 8 results. See
+`documentation/api.md`, `documentation/architecture.md`,
+`documentation/testing.md`, and the Phase 9 files in `prompt history/` for
+ownership, limitations and measured test results.

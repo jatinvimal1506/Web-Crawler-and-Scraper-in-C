@@ -16,6 +16,9 @@ make test-crawler-alloc
 make test-document
 make test-document-integration
 make test-document-alloc
+make test-download
+make test-download-integration
+make test-download-alloc
 ```
 
 `make` also builds the retained pipeline demo and the real `crawler-bfs` CLI.
@@ -26,8 +29,8 @@ boundaries and ownership regressions. Use the controlled C fixture below for
 the current demo, not an unpermissioned public-site crawl.
 
 `make test` includes the original API/URL tests, standalone HTML tests, local
-HTTP fixtures, Phase 5 tests, HTTP metadata allocation-failure tests and original live HTTP
-tests, plus Phase 8 document discovery tests. The live suite may skip probes or fail when public network access is
+HTTP fixtures, Phase 5 tests, HTTP metadata allocation-failure tests, Phase 8
+discovery and Phase 9 download tests, plus original live HTTP tests. The live suite may skip probes or fail when public network access is
 blocked. Local fixtures use only a C server bound to loopback on a free port.
 
 Phase 8's `test-document` covers URL-path extension parsing, case, query/
@@ -73,8 +76,9 @@ neither blanket success nor universal unavailability is justified.
 Allocation accounting is not a complete process leak scan. There is no comprehensive
 HTML5 parser, fuzzing campaign, or deterministic local TLS fixture.
 
-Phases 1–7 cover the original crawler. Phase 7 hardens timeout and redirect
-safety and validates it; it does NOT implement future document features.
+At Phase 7 delivery, Phases 1–7 covered the original crawler and Phase 7
+hardened its timeout/redirect safety; document downloading was not in that
+phase. Phases 8 and 9 were approved and implemented separately afterward.
 
 ## Phase 5 tests
 
@@ -165,6 +169,51 @@ by existing settings/live tests only; deterministic local TLS is NOT VERIFIED.
 
 Test-only option/allocator/transfer hooks are separate objects, never release
 archive members. This adds no production allocator controls or CLI flags.
+
+## Phase 9 binary-download tests
+
+`test-download` covers empty/invalid result handling, timeout and filename
+validation, unsupported input types, and the host/port/HTTPS-downgrade scope
+predicate. Invalid configuration is rejected before it can contact the local
+fixture.
+
+`test-download-integration` runs a C-only POSIX loopback server. It verifies
+byte-for-byte saving of embedded-NUL/high-byte payloads, PDF/DOCX/ZIP MIME,
+the documented generic binary MIME fallback, duplicate/missing/wrong MIME,
+empty and rejected HTTP responses, truncation, dropped connection and a
+one-second timeout. It exercises relative and 301/302/303/307/308 redirects,
+loop and hop limits, malformed/missing/unsupported Locations, a final 404 and
+wrong MIME, and both host/port scope rules. The blocked redirected destination
+must have a zero request count. It tests exact 20 MiB and 20 MiB + 1 with both
+Content-Length and chunked framing; saved bytes are checked against a
+deterministic pattern. Existing output files are checked for unchanged bytes.
+
+`test-download-alloc` compiles isolated test versions of the C modules with
+allocation and file-I/O replacements. It injects allocation failures into every
+observed application allocation, plus `fwrite`, `fclose` and partial-file
+`remove` failures. It verifies result ownership, cleanup status, no false
+success, and safe manual removal when cleanup itself is deliberately blocked.
+These replacements are test-only; confirm the production archive separately
+with `nm` or the platform's symbol tool.
+
+Measured Phase 9 results on the Linux Replit/Nix environment with GCC and
+libcurl 8.14.1: `make clean`, `make`, and the complete `make test` each exited
+0. The new suites passed with 140 unit checks, 277 local integration checks,
+and 159 allocation/file-failure checks including 22 allocation-failure
+positions. The local CLI fixture saved 8 bytes and verified them byte-for-byte.
+Strict `-std=c11 -Wall -Wextra -Wpedantic -Werror` build and targeted tests
+passed. Targeted AddressSanitizer/UndefinedBehaviorSanitizer tests passed with
+leak detection disabled. A leak-enabled run aborted with LeakSanitizer's
+environment error that it does not work under ptrace; this is not a successful
+leak scan. The existing live HTTPS regression also passed 7/7; all new
+downloader integration tests use only loopback fixtures. Windows runtime was
+not run.
+
+The local integration and allocation-fault servers use POSIX sockets/processes
+and explicitly SKIP on native Windows. `make` retains the MSYS2 UCRT64 branch,
+but Windows runtime is NOT VERIFIED unless these commands are actually run in
+that environment. Strict C11 warnings and sanitizer results belong in the
+Phase 9 acceptance handoff and must be based on the actual commands run.
 
 ## Windows/MSYS2 UCRT64 (native execution NOT VERIFIED here)
 

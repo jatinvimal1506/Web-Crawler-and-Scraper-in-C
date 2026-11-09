@@ -81,8 +81,79 @@ successful discoveries; on crawl/discovery budget exhaustion it returns
 1000 unique document/source pairs. Linear URL/pair searches are intentionally
 simple (O(n) lookup, O(n²) worst-case accumulation) at this bounded scale.
 
-There is no binary download, content-type sniffing, hash, file save or report.
-An unrecognized extension stays an ordinary HTTP(S) page candidate.
+`document_discover` does not download files, sniff content, hash, save or report.
+An unrecognized extension stays an ordinary HTTP(S) page candidate. Phase 9
+adds a separate one-document downloader; it does not bulk-download discovery
+results or modify their provenance.
+
+## Phase 9 one-document download API
+
+`include/download.h` declares:
+
+- `download_result_init(&result)` accepts an empty/zeroed result and allocates
+  nothing. Start with `{0}`.
+- `download_document(&config, &result)` validates and downloads exactly one
+  URL recognized by `document_type_from_url`. Input URL, seed URL, output
+  directory and filename are borrowed for the duration of the call.
+- `download_result_free(&result)` frees the owned final-URL and output-path
+  strings, resets the result and is safe to call repeatedly or with NULL.
+- `download_status_message(status)` and `document_type_name(type)` return
+  static strings; do not free them.
+- After the program has finished all HTTP work, call the existing
+  `http_cleanup()` once to release libcurl's process-wide state.
+
+`DownloadConfig` contains the document URL, seed URL, `same_domain` flag,
+timeout, existing output directory and a safe basename. The supported timeout
+is 1–3600 seconds for each individual request/redirect hop. Both scope modes
+pin the seed's effective port; when `same_domain` is 1 the exact seed hostname
+must also match. HTTPS-to-HTTP redirects are rejected. Redirect targets are
+resolved and checked before the next request; only HTTP(S) and at most five
+redirects are allowed. TLS certificate and hostname verification remain
+enabled. This hostname policy is not an IP/DNS firewall or robots/access
+policy.
+
+The write callback receives a pointer plus a byte count, checks multiplication
+and size limits, then writes those bytes through `FILE *` with `fwrite`. It
+never calls `strlen` on a response body, so embedded zero and high-valued bytes
+are preserved. Memory use does not grow with the full document size. The cap
+is 20 MiB inclusive; callback checks also protect chunked responses without
+`Content-Length`.
+
+Exactly one appropriate MIME media type is required: PDF, DOCX, ZIP or
+`application/x-zip-compressed` for ZIP. MIME parameters are accepted. A single
+`application/octet-stream` value is an explicit fallback for a recognized URL
+extension. Missing/duplicate MIME, HTML, other types, 206, non-success HTTP
+status, empty bodies, truncation, timeout, short writes and oversize bodies
+fail. A MIME label does not prove that bytes form a valid PDF, DOCX or ZIP.
+
+The caller chooses the destination basename. It must be at most 128 bytes,
+use only ASCII letters/digits/dot/dash/underscore and end in the matching
+extension. Path separators, drive/path forms, `.`/`..`, empty names, reserved
+Windows device names, and trailing spaces/dots are rejected. The directory
+must already exist. Exclusive create prevents overwriting a pre-existing file.
+The output is visible during streaming; it is not atomically published. On
+failure only a file created by this call is removed. If removal fails, the
+distinct `DOWNLOAD_ERROR_CLEANUP` is returned and the owned `file_path`
+identifies the leftover.
+
+On success, `DownloadResult.final_url` and `file_path` are owned strings,
+`bytes_written` is the complete saved size and `http_status` is the final
+response code. On failure, known URL/status/byte metadata is retained when
+available; ordinary failure clears `file_path` after removing the partial
+file. The result owns no file handle; it must still be freed by the caller.
+Status codes distinguish invalid input, unsupported type, allocation/init,
+timeout, network, redirect, scope, HTTP status, MIME, size, empty/incomplete,
+existing-file, write/file, cleanup and overflow errors.
+
+The C CLI is `build/download-document`:
+
+```sh
+./build/download-document DOCUMENT_URL SEED_URL OUTPUT_DIRECTORY \
+  safe-name.pdf 1 [TIMEOUT_SECONDS]
+```
+
+It handles one document only. Phase 12 bulk orchestration, file organization,
+hashing, extraction and reporting are not included.
 
 ## Part 2 URL API
 

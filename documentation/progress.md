@@ -37,11 +37,13 @@
 - Entity-aware unquoted query context (`&#63;`, hexadecimal references, `&quest;`).
 - Beginner guide: `documentation/phase4.md`.
 
-## Deferred beyond Phase 8
+## Deferred beyond Phase 9
 
-- Binary document downloads, organization, content hashing and CSV reporting.
+- File organization, content hashing, keyword/CSV reporting and final bulk
+  orchestration.
 
-Phases 1–8 are implemented, including bounded BFS through `crawler_run`.
+Phases 1–9 are implemented, including bounded BFS through `crawler_run` and
+the single-document streamer.
 Queue/visited remain reusable independent modules and are now used by it.
 IPv6, internationalized names and exhaustive RFC 3986 conformance
 remain outside the existing URL module's scope. The optional Phase 4 allocation
@@ -107,5 +109,28 @@ Phase 7 was subsequently explicitly approved and implemented:
 - Windows native execution remains NOT VERIFIED; POSIX fixture tests SKIP
   there. See `../prompt history/2026-11-09-phase8-*` for the full instruction,
   decisions and evidence.
-- **NO PHASE 9 OR LATER PHASE STARTED.** No binary downloader, AI, GUI or
-  deployment is included.
+- At Phase 8 delivery there was no binary downloader; Phase 9 below was approved
+  separately. No AI, GUI or deployment is included.
+
+## Part 9 — Safe one-document binary download
+
+- `download_document` accepts a single Phase 8-recognized PDF, DOCX or ZIP URL,
+  scope seed, timeout, existing output directory and safe basename.
+- The C libcurl callback streams bytes directly to a file, preserving NUL and
+  high-valued bytes without buffering the whole document; 20 MiB is inclusive.
+- Content-Type, HTTP status, empty/incomplete body, timeout and byte limit are
+  checked. The single `application/octet-stream` fallback is explicit.
+- Redirects are manually resolved and scope-checked before each request; exact
+  host (when enabled), seed effective port, HTTPS downgrade policy and five-hop
+  cap match the prior crawler contract.
+- Exclusive creation prevents overwrites. Failure paths close and remove only
+  the new partial file; cleanup failure has its own status.
+- C-only local tests cover binary bytes, boundaries, MIME/status, timeout,
+  redirects, scope, file collision, allocator positions and injected write,
+  close and cleanup errors.
+- `download-document` is a separate one-file C CLI; Phase 8 discovery remains
+  independent and does not bulk-download results.
+- Full instruction, design decisions and evidence: `../prompt history/`
+  `2026-11-09-phase9-*`.
+- **NO PHASE 10 OR LATER STARTED.** Type-based folders, content hashing,
+  keyword/CSV reporting and final orchestration remain deferred.

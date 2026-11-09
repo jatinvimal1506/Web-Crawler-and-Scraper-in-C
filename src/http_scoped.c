@@ -12,6 +12,15 @@ static unsigned scoped_port(const ParsedUrl *parts)
         : strcmp(parts->scheme, "https") == 0 ? 443U : 80U;
 }
 
+int http_scope_allows(const ParsedUrl *seed, const ParsedUrl *target,
+                      int same_domain, int previously_https)
+{
+    return seed != NULL && target != NULL &&
+        scoped_port(target) == scoped_port(seed) &&
+        (!same_domain || strcmp(target->host, seed->host) == 0) &&
+        (!previously_https || strcmp(target->scheme, "https") == 0);
+}
+
 static int redirect_status(long status)
 {
     return status == 301 || status == 302 || status == 303 ||
@@ -55,9 +64,7 @@ HttpStatus http_download_scoped(const char *url, long timeout_seconds,
             result = parsed == URL_ERROR_OUT_OF_MEMORY ? HTTP_ERR_OUT_OF_MEMORY : HTTP_ERR_BAD_URL;
             goto done;
         }
-        if (scoped_port(&target) != scoped_port(&seed) ||
-            (same_domain && strcmp(target.host, seed.host) != 0) ||
-            (was_https && strcmp(target.scheme, "https") != 0)) {
+        if (!http_scope_allows(&seed, &target, same_domain, was_https)) {
             result = HTTP_ERR_SCOPE;
             snprintf(response->detail, sizeof(response->detail),
                      "Target refused before request: host/port scope or HTTPS downgrade");
