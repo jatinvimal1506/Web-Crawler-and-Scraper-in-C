@@ -3,9 +3,9 @@
 This university project is a reusable C11 static library with separate C CLI
 demos. Phases 1–8 provide the crawler, URL/HTTP/HTML modules, reusable queue
 and visited set, bounded BFS, and PDF/DOCX/ZIP link discovery with provenance.
-Phase 9 adds a separate, one-document binary streamer. Discovery still does
-not download every result. File organization, hashing, bulk reporting and
-orchestration in Phases 10–12 remain pending.
+Phase 9 adds a separate, one-document binary streamer. Phase 10 hashes and
+organizes one completed file at a time. Keyword/CSV reporting and final
+orchestration in Phases 11–12 remain pending.
 
 ## Build on Linux / Replit
 
@@ -27,14 +27,18 @@ make test-document-alloc # injected result/crawler allocation failures
 make test-download # downloader API, validation and scope-policy tests
 make test-download-integration # C-only local binary/redirect/filesystem tests
 make test-download-alloc # injected allocation and file-I/O failure tests
+make test-sha256 # known-answer and file-size-boundary checks
+make test-organize # folder, content deduplication and ownership checks
+make test-organize-integration # local filesystem and conflict checks
+make test-organize-alloc # allocation and file-I/O failure injection
 make test        # includes local fixtures and original network-dependent tests
 ```
 
 Linux executables include `build/crawler-demo`, `build/demo_pipeline`,
 `build/crawler-bfs`, `build/discover-documents` and `build/download-document`.
-For a beginner explanation of the new functions, pointers, memory ownership,
-module integration and parsing limitations, see
-[`documentation/phase4.md`](documentation/phase4.md).
+For beginner explanations, see [`documentation/phase4.md`](documentation/phase4.md),
+[`documentation/phase10.md`](documentation/phase10.md), and
+[`documentation/api.md`](documentation/api.md).
 
 ## Build on Windows
 
@@ -78,8 +82,8 @@ separately; `crawler_run` itself already performs bounded BFS.
 
 ## Remaining work
 
-File organization/content hashing (Phase 10), keyword/CSV reporting (Phase 11)
-and final integration (Phase 12) remain future work. See
+Keyword/CSV reporting (Phase 11) and final integration (Phase 12) remain future
+work. See
 `documentation/progress.md` and `documentation/architecture.md`.
 
 ## Phase 4: HTML hyperlink extraction
@@ -208,8 +212,9 @@ and [current validation/handoff](prompt%20history/2026-11-09-phase7-acceptance-a
 Earlier Phase 6 history records describe the old post-fetch policy and are
 intentionally preserved, not silently rewritten.
 
-**NO PHASE 10 OR LATER STARTED.** Further DeepDownload features require fresh
-approval. No mode/configuration change, paid upgrade or deployment.
+Phase 10 has now added standalone hashing and organization for one completed
+local file. Phases 11–12 remain pending and are separate acceptance-gated work.
+No mode/configuration change, paid upgrade or deployment was made.
 
 ## Phase 8: public-document link discovery and provenance
 
@@ -273,8 +278,37 @@ make test-download-alloc
 ```
 
 The CLI handles exactly one URL and prints its status, type, HTTP status, byte
-count, final URL and path. It does not organize files, hash content, interpret
-PDF/DOCX/ZIP internals, or bulk-download Phase 8 results. See
+count, final URL and path. It does not organize files or bulk-download Phase 8
+results. Phase 10 provides a separate local-file hashing/organization library;
+it does not interpret PDF/DOCX/ZIP internals. See
 `documentation/api.md`, `documentation/architecture.md`,
 `documentation/testing.md`, and the Phase 9 files in `prompt history/` for
 ownership, limitations and measured test results.
+
+## Phase 10: SHA-256 and type-based organization
+
+`include/sha256.h` and `src/sha256.c` provide dependency-free, incremental
+SHA-256 for a file up to 20 MiB. `include/organize.h` and `src/organize.c`
+organize one already-downloaded PDF, DOCX or ZIP into an existing output root's
+`pdf/`, `docx/` or `zip/` folder. Files are named by their lowercase SHA-256.
+Identical bytes are compared and deduplicated across all three folders; the
+input is never modified, and an existing destination is never overwritten.
+New copies are hashed and size-checked after writing. The code uses a fixed
+16 KiB buffer rather than loading a document into memory.
+
+```sh
+make test-sha256
+make test-organize
+make test-organize-integration
+make test-organize-alloc
+```
+
+These are C tests. The integration and allocator fault-injection suites use
+POSIX filesystem facilities and explicitly skip on native Windows. See
+[`documentation/phase10.md`](documentation/phase10.md) for the APIs, memory
+ownership, failure behavior and scope. The full Phase 10 instruction and
+evidence-based handoff are in `prompt history/`.
+
+Phase 10 is not a bulk pipeline: it takes one completed local file. Phase 11
+will add keyword filtering and CSV only after this phase's verified delivery;
+Phase 12 will provide the bounded end-to-end workflow only after Phase 11.

@@ -5,7 +5,7 @@ CFLAGS += -std=c11 -Wall -Wextra -Wpedantic -Iinclude
 LDLIBS ?= -lcurl
 BUILD := build
 LIB := $(BUILD)/libcrawler.a
-SOURCES := src/project.c src/url.c src/http.c src/http_scoped.c src/html.c src/queue.c src/visited.c src/document.c src/download.c
+SOURCES := src/project.c src/url.c src/http.c src/http_scoped.c src/html.c src/queue.c src/visited.c src/document.c src/download.c src/sha256.c src/organize.c
 OBJECTS := $(SOURCES:src/%.c=$(BUILD)/%.o)
 # Retain native cmd.exe behavior on Windows; use POSIX commands on Linux.
 ifeq ($(OS),Windows_NT)
@@ -41,12 +41,16 @@ DOCUMENT_ALLOC_TEST := $(BUILD)/test-document-alloc$(EXE)
 DOWNLOAD_TEST := $(BUILD)/test-download$(EXE)
 DOWNLOAD_INTEGRATION_TEST := $(BUILD)/test-download-integration$(EXE)
 DOWNLOAD_ALLOC_TEST := $(BUILD)/test-download-alloc$(EXE)
+SHA256_TEST := $(BUILD)/test-sha256$(EXE)
+ORGANIZE_TEST := $(BUILD)/test-organize$(EXE)
+ORGANIZE_INTEGRATION_TEST := $(BUILD)/test-organize-integration$(EXE)
+ORGANIZE_ALLOC_TEST := $(BUILD)/test-organize-alloc$(EXE)
 CRAWLER_ALLOC_TEST := $(BUILD)/test-crawler-alloc$(EXE)
 CRAWLER_ENGINE_TEST := $(BUILD)/test-crawler-engine$(EXE)
 TEST_HEADERS := tests/phase5_check.h
 HEADERS := $(wildcard include/*.h) src/http_internal.h
 
-.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local test-http-alloc test-phase5 test-phase5-alloc test-crawler-engine test-crawler-alloc test-phase7-safety test-phase7-alloc test-document test-document-integration test-document-alloc test-download test-download-integration test-download-alloc
+.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local test-http-alloc test-phase5 test-phase5-alloc test-crawler-engine test-crawler-alloc test-phase7-safety test-phase7-alloc test-document test-document-integration test-document-alloc test-download test-download-integration test-download-alloc test-sha256 test-organize test-organize-integration test-organize-alloc
 all: $(LIB) $(DEMO) $(PIPELINE_DEMO) $(BFS_DEMO) $(DOCUMENT_DEMO) $(DOWNLOAD_DEMO)
 
 $(BUILD):
@@ -151,7 +155,7 @@ test-crawler-alloc: $(CRAWLER_ALLOC_TEST)
 
 # Unit tests need no sockets. Local fixtures need loopback, not Internet access.
 # The original HTTP suite still uses public network endpoints.
-test: test-unit test-phase5-alloc test-crawler-engine test-crawler-alloc test-http-local test-http-alloc test-phase7-safety test-phase7-alloc test-document test-document-integration test-document-alloc test-download test-download-integration test-download-alloc test-http
+test: test-unit test-phase5-alloc test-crawler-engine test-crawler-alloc test-http-local test-http-alloc test-phase7-safety test-phase7-alloc test-document test-document-integration test-document-alloc test-download test-download-integration test-download-alloc test-sha256 test-organize test-organize-integration test-organize-alloc test-http
 
 test-unit: $(TEST) $(URL_TEST) $(HTML_TEST) test-phase5
 	$(RUN)test-crawler$(EXE)
@@ -241,6 +245,37 @@ test-download-integration: $(DOWNLOAD_INTEGRATION_TEST)
 
 test-download-alloc: $(DOWNLOAD_ALLOC_TEST)
 	$(RUN)test-download-alloc$(EXE)
+
+# Phase 10 hashing and local-file organization tests.
+$(SHA256_TEST): tests/test_sha256.c src/sha256.c include/sha256.h | $(BUILD)
+	$(CC) $(CFLAGS) $(LDFLAGS) tests/test_sha256.c src/sha256.c -o $@
+
+$(ORGANIZE_TEST): tests/test_organize.c $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LDLIBS) -o $@
+
+$(ORGANIZE_INTEGRATION_TEST): tests/test_organize_integration.c $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LDLIBS) -o $@
+
+ORGANIZE_ALLOC_NAMES := -Dmalloc=organize_test_malloc -Dfree=organize_test_free -Dfread=organize_test_fread -Dfwrite=organize_test_fwrite -Dfclose=organize_test_fclose -Dremove=organize_test_remove
+ORGANIZE_ALLOC_OBJECTS := $(BUILD)/organize-alloc-organize.o $(BUILD)/organize-alloc-sha256.o
+
+$(BUILD)/organize-alloc-%.o: src/%.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) $(ORGANIZE_ALLOC_NAMES) -c $< -o $@
+
+$(ORGANIZE_ALLOC_TEST): tests/test_organize_alloc.c $(ORGANIZE_ALLOC_OBJECTS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $< $(ORGANIZE_ALLOC_OBJECTS) -o $@
+
+test-sha256: $(SHA256_TEST)
+	$(RUN)test-sha256$(EXE)
+
+test-organize: $(ORGANIZE_TEST)
+	$(RUN)test-organize$(EXE)
+
+test-organize-integration: $(ORGANIZE_INTEGRATION_TEST)
+	$(RUN)test-organize-integration$(EXE)
+
+test-organize-alloc: $(ORGANIZE_ALLOC_TEST)
+	$(RUN)test-organize-alloc$(EXE)
 
 # Optional: requires a GNU-compatible linker (Linux or MSYS2).
 $(BUILD)/test-html-alloc$(EXE): tests/test_html_alloc.c src/html.c src/url.c $(HEADERS) | $(BUILD)

@@ -37,13 +37,12 @@
 - Entity-aware unquoted query context (`&#63;`, hexadecimal references, `&quest;`).
 - Beginner guide: `documentation/phase4.md`.
 
-## Deferred beyond Phase 9
+## Deferred beyond Phase 10
 
-- File organization, content hashing, keyword/CSV reporting and final bulk
-  orchestration.
+- Keyword/CSV reporting and final bulk orchestration.
 
-Phases 1–9 are implemented, including bounded BFS through `crawler_run` and
-the single-document streamer.
+Phases 1–10 are implemented, including bounded BFS through `crawler_run`, the
+single-document streamer, and one-file local organization.
 Queue/visited remain reusable independent modules and are now used by it.
 IPv6, internationalized names and exhaustive RFC 3986 conformance
 remain outside the existing URL module's scope. The optional Phase 4 allocation
@@ -132,5 +131,26 @@ Phase 7 was subsequently explicitly approved and implemented:
   independent and does not bulk-download results.
 - Full instruction, design decisions and evidence: `../prompt history/`
   `2026-11-09-phase9-*`.
-- **NO PHASE 10 OR LATER STARTED.** Type-based folders, content hashing,
-  keyword/CSV reporting and final orchestration remain deferred.
+- At Phase 9 delivery, Phase 10 and later had not started. Phase 10 below was
+  subsequently authorized and implemented.
+
+## Part 10 — SHA-256 and one-file organization
+
+- Plain C11 incremental SHA-256; no third-party hash dependency. Fixed 16 KiB
+  buffer and 20 MiB inclusive file limit.
+- One already-completed local PDF, DOCX or ZIP is placed under the matching
+  `pdf/`, `docx/` or `zip/` folder with a lowercase digest filename.
+- Identical bytes are compared across all three folders and stored once,
+  including when callers provide different document types.
+- Exclusive destination creation, post-copy digest/size verification, no input
+  modification, and cleanup limited to a partial file created by this call.
+- Tests cover known hash vectors, binary and size boundaries, local filesystem
+  behavior, corrupt canonical paths, duplicates and injected allocation/I/O
+  failures. Test-only wrappers remain outside the release static library.
+- `documentation/phase10.md` explains API functions and ownership;
+  `../prompt history/2026-11-09-phase10-design-and-handoff.md` records choices
+  and actual acceptance evidence.
+- POSIX filesystem integration/fault tests skip on native Windows; Windows
+  runtime and junction/reparse-point protections are not verified here.
+- Phase 11 keyword/CSV reporting and Phase 12 end-to-end orchestration remain
+  separate, gated phases. Phase 10 is not a crawler-to-file bulk pipeline.

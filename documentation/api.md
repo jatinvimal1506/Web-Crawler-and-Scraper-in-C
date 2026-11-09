@@ -152,8 +152,60 @@ The C CLI is `build/download-document`:
   safe-name.pdf 1 [TIMEOUT_SECONDS]
 ```
 
-It handles one document only. Phase 12 bulk orchestration, file organization,
-hashing, extraction and reporting are not included.
+It handles one document only. Phase 10 separately hashes and organizes an
+already-completed local file; this downloader CLI does not invoke that API.
+Phase 11 keyword/CSV reporting and Phase 12 bounded orchestration remain
+pending.
+
+## Phase 10 SHA-256 and file organization API
+
+`include/sha256.h` declares:
+
+- `sha256_status_message(status)` returns a static string; do not free it.
+- `sha256_file(path, hex_out, bytes_read)` hashes a borrowed file path using
+  plain C11. `hex_out` must have room for 64 lowercase hex digits and a NUL;
+  `bytes_read` is optional. Outputs are cleared on failure. Empty input is
+  valid to the hash helper, but not to the document organizer.
+
+Hashing is incremental, with a fixed 16 KiB buffer and a 20 MiB inclusive
+limit. No OpenSSL or other hashing library is required. Hashing takes O(file
+bytes) time and constant buffer memory.
+
+`include/organize.h` declares:
+
+- `organizer_status_message(status)` returns a static string.
+- `organize_result_init(result)` initializes a zeroed result without
+  allocating. Use `{0}` before the first call.
+- `organize_result_free(result)` frees `stored_path`, resets the structure,
+  and is safe for NULL or repeated cleanup.
+- `organizer_prepare_directories(root)` requires an existing trusted output
+  root, then creates/verifies its immediate `pdf`, `docx` and `zip` folders.
+- `organize_file(input, type, root, result)` borrows the input and root paths
+  for the duration of the call. Input must be a nonempty regular file no larger
+  than 20 MiB. The caller must initialize `result` empty and must not shallow
+  copy it after it owns memory.
+
+A new unique destination is exclusively created as
+`root/type/sha256.ext`. The organizer searches all three type folders and
+byte-compares matching digest names, so identical bytes are stored only once
+even if the caller later supplies a different type. The returned
+`stored_type`/path describe the first actual stored copy. A hash-name collision
+whose bytes differ returns a conflict; it never overwrites the existing path.
+
+The result owns `stored_path` on `ORGANIZER_NEW_FILE`,
+`ORGANIZER_DUPLICATE`, and `ORGANIZER_ERROR_CLEANUP`; release it with
+`organize_result_free`. On ordinary failure the result owns no path. The caller
+retains and owns the input file, which is never removed or changed. Copying and
+verification use bounded buffers; after writing, the destination is rehashed
+and its exact byte count checked. Only a new partial file from this call may be
+removed. If that cleanup fails, the distinct cleanup status preserves its path
+for diagnosis.
+
+POSIX builds reject symlink input/root/type directories. Windows junction or
+reparse-point detection is not guaranteed by the current CRT implementation.
+The module handles one local file only; it does not crawl directories or
+perform Phase 11/12 reporting/orchestration. See
+[`phase10.md`](phase10.md) for beginner-oriented examples and test descriptions.
 
 ## Part 2 URL API
 

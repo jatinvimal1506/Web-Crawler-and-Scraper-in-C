@@ -18,6 +18,10 @@ The project keeps the library and demonstration application separate. The Makefi
   document/source provenance results; observes BFS links without fetching files.
 - `download.c` / `download.h`: Phase 9 one-document binary streamer with
   checked output ownership, response validation and pre-request redirects.
+- `sha256.c` / `sha256.h`: Phase 10 plain C11 incremental file hashing with
+  fixed memory use and a 20 MiB inclusive file limit.
+- `organize.c` / `organize.h`: Phase 10 one-file placement in type folders,
+  content deduplication, exclusive creation and post-copy verification.
 - `examples/demo.c`: Part 1 CLI that validates its arguments and demonstrates the current API status.
 - `examples/demo_pipeline.c`: presentation demo that calls the crawler API, URL parser, and downloader in sequence.
 - `examples/discover_documents.c`: Phase 8 CLI for a controlled URL/depth
@@ -148,6 +152,37 @@ library has no allocation or file-operation injection hooks. See
 `../prompt history/2026-11-09-phase9-design-decisions.md` for rejected
 alternatives and policy trade-offs.
 
-Phase 9 does not bulk-download discovery results, make type folders, hash or
-deduplicate file contents, parse document formats, or generate reports. Those
-are deferred and require separate approval.
+Phase 9 remains a one-document transfer API; Phase 10 separately hashes and
+organizes one completed local file. Neither phase parses PDF/DOCX/ZIP internals
+or creates a bulk report. Phase 11 keyword/CSV reporting and Phase 12 end-to-end
+orchestration remain pending and must pass their own acceptance gates.
+
+## Phase 10 local hashing and organization
+
+`sha256_file` reads one borrowed path in fixed 16 KiB chunks. It writes a
+lowercase digest into caller-provided storage and does not allocate based on the
+file's size. The helper accepts empty files as a general hash operation, while
+`organize_file` rejects an empty document and enforces the same 20 MiB inclusive
+limit used for Phase 9 downloads.
+
+The organizer receives one completed input path and an existing output root.
+It prepares `pdf/`, `docx/`, and `zip/`, checks the digest-named candidate in
+each folder, and compares bytes before treating a digest match as a duplicate.
+This makes deduplication independent of the caller's declared type. If a
+canonical digest path exists with different bytes, the function returns a
+conflict rather than overwriting it.
+
+For a unique file, it creates the destination exclusively, copies with a fixed
+buffer, then hashes and counts the stored copy again. Its caller-owned result
+contains the actual stored type, digest, byte count and an owned path on new,
+duplicate or cleanup-failure outcomes. The input remains borrowed and
+unchanged. Any failure removes only a new partial destination from this call;
+if removal itself fails, the result preserves the owned path for recovery.
+`organize_result_free` releases that path. POSIX symlink checks are explicit;
+Windows junction/reparse-point protections are not guaranteed and Windows
+runtime remains unverified.
+
+The organizer checks a fixed three folders, so lookup compares at most three
+candidate files; each byte comparison and copy is O(file bytes). Memory stays
+constant. This is intentionally simpler than a general index or directory
+scanner and is appropriate for Phase 10's one-file operation.

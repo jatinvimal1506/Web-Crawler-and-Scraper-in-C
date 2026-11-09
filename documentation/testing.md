@@ -19,6 +19,10 @@ make test-document-alloc
 make test-download
 make test-download-integration
 make test-download-alloc
+make test-sha256
+make test-organize
+make test-organize-integration
+make test-organize-alloc
 ```
 
 `make` also builds the retained pipeline demo and the real `crawler-bfs` CLI.
@@ -30,7 +34,7 @@ the current demo, not an unpermissioned public-site crawl.
 
 `make test` includes the original API/URL tests, standalone HTML tests, local
 HTTP fixtures, Phase 5 tests, HTTP metadata allocation-failure tests, Phase 8
-discovery and Phase 9 download tests, plus original live HTTP tests. The live suite may skip probes or fail when public network access is
+discovery, Phase 9 download tests, Phase 10 hash/organization tests, plus original live HTTP tests. The live suite may skip probes or fail when public network access is
 blocked. Local fixtures use only a C server bound to loopback on a free port.
 
 Phase 8's `test-document` covers URL-path extension parsing, case, query/
@@ -238,3 +242,30 @@ POSIX fork/socket targets explicitly print SKIP on native Windows; portable
 API/URL/HTML/queue/visited/in-memory engine tests remain. A successful Makefile
 dry-run is NOT Windows runtime evidence. Windows allocator/linker wrapping and
 native sanitizer runtime availability must still be checked on a real target.
+
+## Phase 10 hashing and organization tests
+
+`make test-sha256` checks independently verified known digests for empty, text,
+binary, one-million-byte and maximum-sized inputs, and rejects a file larger
+than the 20 MiB limit. `make test-organize` covers result initialization and
+cleanup, supported types, output folders, duplicate content across types,
+caller-owned input preservation and returned path ownership.
+
+`make test-organize-integration` uses local temporary files/directories to
+check byte-identical duplicate files, different same-sized files, a preexisting
+correct digest path, a conflicting file at a canonical digest path, empty and
+oversized inputs, missing roots, symlink rejection where POSIX supports it, and
+directory collisions. It needs POSIX `mkdtemp`/symlink facilities and prints
+`SKIP` on native Windows.
+
+`make test-organize-alloc` builds separate C test objects with allocation and
+stdio/file-operation wrappers. It injects each observed allocation failure and
+read/write/close/remove failures, checks that only new partial destinations
+are cleaned up, verifies inputs remain unchanged, tracks outstanding
+application allocations, and retries successfully after failures. The wrappers
+are not linked into `libcrawler.a`. It also explicitly skips on native Windows.
+`make test` runs all four Phase 10 targets alongside the previous suites.
+
+This accounting is not a process-wide leak proof. Actual clean-build, suite,
+strict compiler, sanitizer, Windows and Git evidence for this delivery is
+recorded in `../prompt history/2026-11-09-phase10-design-and-handoff.md`.
