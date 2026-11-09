@@ -18,16 +18,21 @@ int main(int argc, char **argv)
 {
     unsigned port = crawler_fixture_start();
     char url[128];
+    int document_demo = argc == 2 && strcmp(argv[1], "--documents") == 0;
     int status;
     pid_t child;
-    (void)snprintf(url, sizeof(url), "http://127.0.0.1:%u/site", port);
+    (void)snprintf(url, sizeof(url), document_demo
+                   ? "http://127.0.0.1:%u/doc-home"
+                   : "http://127.0.0.1:%u/site", port);
     printf("Controlled C fixture: %s\n", url);
     (void)fflush(stdout);
-    if (argc == 2 && strcmp(argv[1], "--demo") == 0) {
+    if (argc == 2 && (strcmp(argv[1], "--demo") == 0 || document_demo)) {
         child = fork();
         if (child < 0) { crawler_fixture_stop(); return 1; }
         if (child == 0) {
-            execl("./build/crawler-bfs", "crawler-bfs", url, "2", "1", (char *)NULL);
+            execl(document_demo ? "./build/discover-documents" : "./build/crawler-bfs",
+                  document_demo ? "discover-documents" : "crawler-bfs",
+                  url, "2", "1", (char *)NULL);
             _exit(127);
         }
         while (waitpid(child, &status, 0) < 0) {

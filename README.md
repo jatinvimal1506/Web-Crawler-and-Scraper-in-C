@@ -5,8 +5,9 @@ demonstration programs. Parts 1–3 provide the public crawler API, HTTP(S) URL
 parsing, and single-page HTTP downloading. Phase 4 now provides standalone HTML
 anchor extraction. Phase 5 adds a reusable FIFO URL/depth queue and normalized
 visited-URL set. Phase 6 integrates these modules into a bounded,
-single-threaded BFS crawler. Phase 7 validates/hardens the original crawler;
-future document discovery/downloading is NOT implemented.
+single-threaded BFS crawler. Phase 7 hardens timeout/redirect safety. Phase 8
+uses that BFS to discover public PDF, DOCX and ZIP links and record their
+source pages. Binary files are never downloaded; Phases 9–12 remain pending.
 
 ## Build on Linux / Replit
 
@@ -22,10 +23,14 @@ make test-crawler-engine # deterministic loopback BFS/redirect/scope/stats tests
 make test-crawler-alloc # whole-engine allocation-failure and invariant tests
 make test-http-local # C-only loopback HTTP fixtures (POSIX; Windows prints SKIP)
 make test-http-alloc # adds deterministic HTTP metadata-copy OOM tests
+make test-document # URL-extension classification and API tests
+make test-document-integration # C-only local BFS/provenance tests
+make test-document-alloc # injected result/crawler allocation failures
 make test        # includes local fixtures and original network-dependent tests
 ```
 
-Linux executables are `build/crawler-demo` and `build/demo_pipeline`.
+Linux executables include `build/crawler-demo`, `build/demo_pipeline`,
+`build/crawler-bfs` and `build/discover-documents`.
 For a beginner explanation of the new functions, pointers, memory ownership,
 module integration and parsing limitations, see
 [`documentation/phase4.md`](documentation/phase4.md).
@@ -64,12 +69,14 @@ NOT_IMPLEMENTED remains a legacy enum value, not the valid-run behavior.
 
 `include/http.h` and `src/http.c` provide `http_download` for one HTTP(S) page. It uses libcurl, follows redirects, applies a timeout and body-size limit, and reports HTTP status, response size, content type, final URL, and structured failures. Successful response fields are owned by the caller and released with `http_response_free`; call `http_cleanup` when finished.
 
-The pipeline demo calls the Part 1 API, then demonstrates URL parsing and the standalone downloader. The latter two APIs are called separately because `crawler_run` does not yet orchestrate them.
+The presentation pipeline demo calls its standalone URL/downloader functions
+separately; `crawler_run` itself already performs bounded BFS.
 
 ## Remaining work
 
-Future DeepDownload document discovery/downloads,
-deduplication, provenance and reporting remain future work. See
+Binary document downloads (Phase 9), file organization/content hashing (Phase
+10), keyword/CSV reporting (Phase 11) and final integration (Phase 12) remain
+future work. See
 `documentation/progress.md` and `documentation/architecture.md`.
 
 ## Phase 4: HTML hyperlink extraction
@@ -198,5 +205,29 @@ and [current validation/handoff](prompt%20history/2026-11-09-phase7-acceptance-a
 Earlier Phase 6 history records describe the old post-fetch policy and are
 intentionally preserved, not silently rewritten.
 
-**NO PHASE 8 OR LATER PHASE STARTED.** Further DeepDownload features require
-explicit approval. No mode/configuration change, paid upgrade or deployment.
+**NO PHASE 9 OR LATER PHASE STARTED.** Further DeepDownload features require
+fresh approval. No mode/configuration change, paid upgrade or deployment.
+
+## Phase 8: public-document link discovery and provenance
+
+`include/document.h` and `src/document.c` add `document_discover` and
+`document_type_from_url`. The classifier looks only at the URL path extension:
+`.pdf`, `.docx` and `.zip` are recognized without fetching or guessing file
+content. The discovery observer runs while the existing C11 BFS processes
+in-scope HTML links. It stores each normalized document URL once and records
+each normalized source-page URL plus its crawl depth once. Repeated links and
+fragment-only URL variants do not duplicate a record/source pair; meaningful
+query differences remain distinct.
+
+Document URLs are filtered out of the page queue and are never downloaded.
+Ordinary HTTP(S) links with other extensions remain normal crawler candidates.
+Results own their strings and arrays; callers initialize with `{0}` or
+`document_results_init`, read with the accessors, and release with
+`document_results_free`. Linear searches keep this beginner-scale collection
+simple (membership can take O(n)); results are limited to 1000 occurrences.
+See `documentation/api.md`, `documentation/architecture.md`,
+`documentation/testing.md`, and the Phase 8 files in `prompt history/`.
+
+Try the controlled local demonstration with `make build/crawler-fixture`,
+then `./build/crawler-fixture --documents`. It starts the C loopback fixture
+and runs `build/discover-documents`; no external site is contacted.

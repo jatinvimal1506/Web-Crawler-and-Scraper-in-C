@@ -5,7 +5,7 @@ CFLAGS += -std=c11 -Wall -Wextra -Wpedantic -Iinclude
 LDLIBS ?= -lcurl
 BUILD := build
 LIB := $(BUILD)/libcrawler.a
-SOURCES := src/project.c src/url.c src/http.c src/http_scoped.c src/html.c src/queue.c src/visited.c
+SOURCES := src/project.c src/url.c src/http.c src/http_scoped.c src/html.c src/queue.c src/visited.c src/document.c
 OBJECTS := $(SOURCES:src/%.c=$(BUILD)/%.o)
 # Retain native cmd.exe behavior on Windows; use POSIX commands on Linux.
 ifeq ($(OS),Windows_NT)
@@ -22,6 +22,7 @@ DEMO := $(BUILD)/crawler-demo$(EXE)
 PIPELINE_DEMO := $(BUILD)/demo_pipeline$(EXE)
 BFS_DEMO := $(BUILD)/crawler-bfs$(EXE)
 CRAWLER_FIXTURE := $(BUILD)/crawler-fixture$(EXE)
+DOCUMENT_DEMO := $(BUILD)/discover-documents$(EXE)
 TEST := $(BUILD)/test-crawler$(EXE)
 URL_TEST := $(BUILD)/test-url$(EXE)
 HTTP_TEST := $(BUILD)/test-http$(EXE)
@@ -33,13 +34,16 @@ VISITED_TEST := $(BUILD)/test-visited$(EXE)
 PHASE5_ALLOC_TEST := $(BUILD)/test-phase5-alloc$(EXE)
 SAFETY_TEST := $(BUILD)/test-phase7-safety$(EXE)
 PHASE7_ALLOC_TEST := $(BUILD)/test-phase7-alloc$(EXE)
+DOCUMENT_TEST := $(BUILD)/test-document$(EXE)
+DOCUMENT_INTEGRATION_TEST := $(BUILD)/test-document-integration$(EXE)
+DOCUMENT_ALLOC_TEST := $(BUILD)/test-document-alloc$(EXE)
 CRAWLER_ALLOC_TEST := $(BUILD)/test-crawler-alloc$(EXE)
 CRAWLER_ENGINE_TEST := $(BUILD)/test-crawler-engine$(EXE)
 TEST_HEADERS := tests/phase5_check.h
 HEADERS := $(wildcard include/*.h) src/http_internal.h
 
-.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local test-http-alloc test-phase5 test-phase5-alloc test-crawler-engine test-crawler-alloc test-phase7-safety test-phase7-alloc
-all: $(LIB) $(DEMO) $(PIPELINE_DEMO) $(BFS_DEMO)
+.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local test-http-alloc test-phase5 test-phase5-alloc test-crawler-engine test-crawler-alloc test-phase7-safety test-phase7-alloc test-document test-document-integration test-document-alloc
+all: $(LIB) $(DEMO) $(PIPELINE_DEMO) $(BFS_DEMO) $(DOCUMENT_DEMO)
 
 $(BUILD):
 ifeq ($(OS),Windows_NT)
@@ -63,7 +67,10 @@ $(PIPELINE_DEMO): examples/demo_pipeline.c $(LIB)
 $(BFS_DEMO): examples/bfs_demo.c $(LIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LDLIBS) -o $@
 
-$(CRAWLER_FIXTURE): tests/crawler_fixture_main.c tests/crawler_fixture.c tests/crawler_fixture.h $(LIB) $(BFS_DEMO)
+$(DOCUMENT_DEMO): examples/discover_documents.c $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LDLIBS) -o $@
+
+$(CRAWLER_FIXTURE): tests/crawler_fixture_main.c tests/crawler_fixture.c tests/crawler_fixture.h $(LIB) $(BFS_DEMO) $(DOCUMENT_DEMO)
 	$(CC) $(CFLAGS) $(LDFLAGS) tests/crawler_fixture_main.c tests/crawler_fixture.c $(LIB) $(LDLIBS) -o $@
 
 $(CRAWLER_ENGINE_TEST): tests/test_crawler_engine.c tests/crawler_fixture.c tests/crawler_fixture.h $(TEST_HEADERS) $(LIB)
@@ -137,7 +144,7 @@ test-crawler-alloc: $(CRAWLER_ALLOC_TEST)
 
 # Unit tests need no sockets. Local fixtures need loopback, not Internet access.
 # The original HTTP suite still uses public network endpoints.
-test: test-unit test-phase5-alloc test-crawler-engine test-crawler-alloc test-http-local test-http-alloc test-phase7-safety test-phase7-alloc test-http
+test: test-unit test-phase5-alloc test-crawler-engine test-crawler-alloc test-http-local test-http-alloc test-phase7-safety test-phase7-alloc test-document test-document-integration test-document-alloc test-http
 
 test-unit: $(TEST) $(URL_TEST) $(HTML_TEST) test-phase5
 	$(RUN)test-crawler$(EXE)
@@ -179,6 +186,30 @@ $(PHASE7_ALLOC_TEST): tests/test_phase7_alloc.c tests/crawler_fixture.c tests/cr
 
 test-phase7-alloc: $(PHASE7_ALLOC_TEST)
 	$(RUN)test-phase7-alloc$(EXE)
+
+$(DOCUMENT_TEST): tests/test_document.c $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LDLIBS) -o $@
+
+$(DOCUMENT_INTEGRATION_TEST): tests/test_document_integration.c tests/crawler_fixture.c tests/crawler_fixture.h $(TEST_HEADERS) $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) tests/test_document_integration.c tests/crawler_fixture.c $(LIB) $(LDLIBS) -o $@
+
+DOCUMENT_ALLOC_NAMES := -Dmalloc=document_test_malloc -Drealloc=document_test_realloc -Dfree=document_test_free
+DOCUMENT_ALLOC_OBJECTS := $(SOURCES:src/%.c=$(BUILD)/document-alloc-%.o)
+
+$(BUILD)/document-alloc-%.o: src/%.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) $(DOCUMENT_ALLOC_NAMES) -c $< -o $@
+
+$(DOCUMENT_ALLOC_TEST): tests/test_document_alloc.c tests/crawler_fixture.c tests/crawler_fixture.h $(TEST_HEADERS) $(DOCUMENT_ALLOC_OBJECTS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $< tests/crawler_fixture.c $(DOCUMENT_ALLOC_OBJECTS) $(LDLIBS) -o $@
+
+test-document: $(DOCUMENT_TEST)
+	$(RUN)test-document$(EXE)
+
+test-document-integration: $(DOCUMENT_INTEGRATION_TEST)
+	$(RUN)test-document-integration$(EXE)
+
+test-document-alloc: $(DOCUMENT_ALLOC_TEST)
+	$(RUN)test-document-alloc$(EXE)
 
 # Optional: requires a GNU-compatible linker (Linux or MSYS2).
 $(BUILD)/test-html-alloc$(EXE): tests/test_html_alloc.c src/html.c src/url.c $(HEADERS) | $(BUILD)

@@ -37,11 +37,11 @@
 - Entity-aware unquoted query context (`&#63;`, hexadecimal references, `&quest;`).
 - Beginner guide: `documentation/phase4.md`.
 
-## Deferred beyond the original seven-phase crawler
+## Deferred beyond Phase 8
 
-- Future DeepDownload document discovery/downloads/provenance/file dedup/reporting.
+- Binary document downloads, organization, content hashing and CSV reporting.
 
-Parts 1–6 are implemented, including bounded BFS through `crawler_run`.
+Phases 1–8 are implemented, including bounded BFS through `crawler_run`.
 Queue/visited remain reusable independent modules and are now used by it.
 IPv6, internationalized names and exhaustive RFC 3986 conformance
 remain outside the existing URL module's scope. The optional Phase 4 allocation
@@ -89,4 +89,23 @@ Phase 7 was subsequently explicitly approved and implemented:
 - Stale testing text corrected; native Windows remains NOT VERIFIED,
   POSIX fixtures explicitly SKIP; actual sanitizer/leak observations recorded.
 - Full order/decisions/evidence: `../prompt history/2026-11-09-phase7-*`.
-- NO PHASE 8 OR LATER PHASE STARTED. No document features or deployment.
+- Phase 8 was subsequently explicitly approved and implemented:
+
+## Part 8 — Public-document link discovery and provenance
+
+- URL-path-only, case-insensitive PDF/DOCX/ZIP extension classification;
+  query strings and fragments do not affect type.
+- Additive BFS link observer stores normalized document URLs and unique
+  normalized source-page/depth pairs, preserving first-discovery order.
+- Recognized documents are filtered out before page scheduling and are never
+  downloaded. No content sniffing or network probes for file type.
+- Results own all strings/arrays; public init/access/free functions document
+  pointer lifetime. Explicit 1000 occurrence ceiling; linear lookup suits
+  the current beginner-scale limits.
+- C-only classifier, local BFS/provenance and allocation-failure tests.
+- CLI demo `discover-documents` runs against the controlled C loopback fixture.
+- Windows native execution remains NOT VERIFIED; POSIX fixture tests SKIP
+  there. See `../prompt history/2026-11-09-phase8-*` for the full instruction,
+  decisions and evidence.
+- **NO PHASE 9 OR LATER PHASE STARTED.** No binary downloader, AI, GUI or
+  deployment is included.

@@ -1,6 +1,6 @@
 # Public API
 
-## Current Phase 7 safety contract
+## Safety contract retained from Phase 7
 
 Both `http_download` and `crawler_run` accept timeout **1..3600 inclusive**;
 unsupported values return INVALID_ARGUMENT before any network request.
@@ -33,7 +33,13 @@ scope policy is superseded by
 
 `include/project.h` declares `crawler_run(config, stats)`. It zeroes available
 caller-owned statistics and validates config/start URL before doing network
-work. Phase 6 performs real bounded BFS. Existing config/stat layouts and enum
+work. Phase 6 performs real bounded BFS. Additive
+`crawler_run_with_link_observer(config, stats, observer, context)` calls a C
+callback for each resolved, normalized, in-scope href. URL strings are borrowed
+only for the callback duration. Set `*crawl_link = 0` to inspect/record the
+link without placing it in the BFS queue; `1` preserves normal crawling. Return
+`CRAWLER_OK` to continue, or a documented fatal status to stop. Ordinary
+`crawler_run` passes no observer and preserves its Phase 6 behavior. Existing config/stat layouts and enum
 values are preserved; PARTIAL, LIMIT_REACHED and INTERNAL_ERROR are appended.
 `crawler_status_string` returns a static string. No allocated data escapes.
 
@@ -43,6 +49,40 @@ HTTP error bodies are not counted. Known final aliases are tracked even when
 the download/parsing fails. Independent queue/visited APIs remain unchanged.
 The original HTML extractor is unchanged in behavior; the additive
 `html_extract_links_limited` provides bounded temporary output for the engine.
+
+## Phase 8 document discovery API
+
+`include/document.h` declares:
+
+- `document_type_from_url(url, &type)` parses an absolute HTTP(S) URL and
+  classifies only the path's final `.pdf`, `.docx` or `.zip` suffix,
+  case-insensitively. Query and fragment are ignored. A valid unmatched suffix
+  returns `DOCUMENT_OK` with `DOCUMENT_TYPE_UNKNOWN`; it never probes content.
+- `document_discover(config, &results, &stats)` runs the existing bounded BFS
+  with the additive link observer. It retains normalized document URLs and
+  distinct normalized source-page/depth pairs. A recognized document link is
+  observed but filtered from the page queue, so the crawler does not fetch it.
+- `document_results_init` initializes an empty/zeroed object without allocating.
+  `document_results_free` releases all owned document strings, source arrays,
+  source-page strings and the top-level array; it is NULL-safe and repeatable.
+- `document_results_count`, `document_results_source_count` and
+  `document_results_at` provide read-only access. The returned record pointer
+  is borrowed and valid only until the results are freed or reused.
+- `document_type_name` and `document_status_message` return static strings;
+  callers must not free them.
+
+Initialize `DocumentResults` as `{0}` or call its init function on a zeroed
+object. Do not shallow-copy it or modify its public arrays. All result strings
+are owned by the result object and no result allocation escapes it. On fatal
+OOM/overflow the operation releases partial results and returns an empty
+object; on a non-root page failure it returns `DOCUMENT_PARTIAL` while keeping
+successful discoveries; on crawl/discovery budget exhaustion it returns
+`DOCUMENT_LIMIT_REACHED` with bounded results retained. The result limit is
+1000 unique document/source pairs. Linear URL/pair searches are intentionally
+simple (O(n) lookup, O(n²) worst-case accumulation) at this bounded scale.
+
+There is no binary download, content-type sniffing, hash, file save or report.
+An unrecognized extension stays an ordinary HTTP(S) page candidate.
 
 ## Part 2 URL API
 

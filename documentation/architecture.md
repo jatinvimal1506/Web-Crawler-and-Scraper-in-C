@@ -14,8 +14,12 @@ The project keeps the library and demonstration application separate. The Makefi
   decoding, raw-text exclusions and relative HTTP(S) link resolution.
 - `queue.c` / `queue.h`: Phase 5 linked FIFO URL/depth ownership container.
 - `visited.c` / `visited.h`: Phase 5 linked canonical URL set using `url_normalize`.
+- `document.c` / `document.h`: Phase 8 extension classifier and owned
+  document/source provenance results; observes BFS links without fetching files.
 - `examples/demo.c`: Part 1 CLI that validates its arguments and demonstrates the current API status.
 - `examples/demo_pipeline.c`: presentation demo that calls the crawler API, URL parser, and downloader in sequence.
+- `examples/discover_documents.c`: Phase 8 CLI for a controlled URL/depth
+  discovery run; it does not save binary files.
 
 ## Current integration boundary
 
@@ -27,6 +31,11 @@ signature and adds a scoped entry point; both reuse one checked transport.
 HTML gains a bounded-output entry point while keeping its original API.
 The legacy pipeline still calls standalone URL/HTTP functions in addition to
 its root-only crawler call; use crawler-bfs and the C loopback fixture for BFS.
+`document_discover` uses the additive `crawler_run_with_link_observer` hook so
+it sees each resolved, normalized, in-scope href before the crawler decides
+whether to queue it as an HTML page. The observer records recognized document
+URLs and returns `crawl_link = 0`; it never downloads those links. The ordinary
+`crawler_run` API supplies no observer and keeps its Phase 6 behavior.
 
 ## Ownership and failure boundary
 
@@ -40,6 +49,11 @@ used. Callers free responses before reuse.
 Extraction borrows the response body and final URL only for the duration of the
 call. Its output owns independent strings and is freed with `html_links_free`.
 The HTTP/HTML public signatures are unchanged.
+Document discovery retains independently owned normalized strings and dynamic
+arrays. `DocumentResults` is caller-owned: initialize it empty, inspect records
+through const accessors, and call `document_results_free` on every exit path.
+Fatal allocation failures roll results back to empty; a partial child-crawl
+failure keeps the discovered records and returns `DOCUMENT_PARTIAL`.
 
 ## Implemented Phase 6 data flow
 
@@ -59,4 +73,29 @@ That Phase 6 record is historical: Phase 7 now validates each redirect before
 requesting it, supports timeouts 1..3600, and checks essential curl options.
 Current contracts/ownership and limitations:
 `../prompt history/2026-11-09-phase7-decisions-and-fixes.md`.
-No concurrency or future document features are included.
+The Phase 8 observer and result ownership decisions are recorded in
+`../prompt history/2026-11-09-phase8-design-decisions.md`.
+
+## Phase 8 document discovery
+
+`document_type_from_url` parses an absolute HTTP(S) URL and checks only the
+path suffix `.pdf`, `.docx` or `.zip` (ASCII case-insensitive). It does not
+infer file types from response headers or content. The query and fragment are
+not part of the suffix check. `document_discover` records each normalized
+document URL once and appends each unique normalized `(document, source page)`
+pair with the source's BFS depth. First-discovery order is stable. A repeated
+same-page link, or a fragment variant normalized to the same key, does not
+create a second pair; meaningful query differences remain separate.
+
+The returned `DocumentRecord` owns its URL and source array; each source owns
+its page URL. The results object owns its record array. Accessor pointers are
+borrowed and remain valid until results are freed or the results are changed
+by a new discovery call. `document_results_free` releases every owned layer
+and resets the object. The per-result occurrence limit is 1000; linear search
+uses O(n) membership checks and can be O(n²) across a full list. This is
+deliberately simple and adequate for the bounded teaching demo.
+
+This phase discovers link metadata only. It does not fetch PDF/DOCX/ZIP files,
+inspect file contents, save files, compute hashes, or add reporting/UI.
+Unknown extensions remain ordinary HTTP(S) crawl candidates; no filename or
+content is guessed to be a supported document type.

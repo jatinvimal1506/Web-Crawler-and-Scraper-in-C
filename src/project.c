@@ -32,6 +32,8 @@ typedef struct {
     ParsedUrl seed;
     const CrawlerConfig *config;
     CrawlerStats *stats;
+    CrawlerLinkObserver observer;
+    void *observer_context;
     size_t attempts;
 } Crawl;
 
@@ -209,7 +211,8 @@ static CrawlerStatus process_page(Crawl *crawl, const UrlQueueItem *item)
         result = CRAWLER_LIMIT_REACHED;
         goto done;
     }
-    if ((size_t)item->depth >= crawl->config->max_depth || item->depth == INT_MAX) {
+    if (crawl->observer == NULL &&
+        ((size_t)item->depth >= crawl->config->max_depth || item->depth == INT_MAX)) {
         if (item->depth == INT_MAX && crawl->config->max_depth > (size_t)INT_MAX &&
             links.count != 0) {
             result = CRAWLER_LIMIT_REACHED;
@@ -228,7 +231,31 @@ static CrawlerStatus process_page(Crawl *crawl, const UrlQueueItem *item)
         }
         result = in_scope(crawl, key, &allowed);
         if (result == CRAWLER_OK && allowed) {
-            result = schedule(crawl, key, item->depth + 1);
+            int crawl_link = 1;
+            if (crawl->observer != NULL) {
+                CrawlerStatus observed = crawl->observer(final, (size_t)item->depth,
+                    key, &crawl_link, crawl->observer_context);
+                if (observed != CRAWLER_OK) {
+                    result = observed == CRAWLER_OUT_OF_MEMORY ||
+                             observed == CRAWLER_LIMIT_REACHED ||
+                             observed == CRAWLER_INTERNAL_ERROR
+                        ? observed : CRAWLER_INTERNAL_ERROR;
+                    free(key);
+                    goto done;
+                }
+                if (crawl_link != 0 && crawl_link != 1) {
+                    result = CRAWLER_INTERNAL_ERROR;
+                    free(key);
+                    goto done;
+                }
+            }
+            if (crawl_link && (size_t)item->depth < crawl->config->max_depth) {
+                if (item->depth == INT_MAX) {
+                    result = CRAWLER_LIMIT_REACHED;
+                } else {
+                    result = schedule(crawl, key, item->depth + 1);
+                }
+            }
         }
         free(key);
         if (result != CRAWLER_OK) {
@@ -254,7 +281,10 @@ done:
     return result;
 }
 
-CrawlerStatus crawler_run(const CrawlerConfig *config, CrawlerStats *stats)
+static CrawlerStatus crawler_run_internal(const CrawlerConfig *config,
+                                          CrawlerStats *stats,
+                                          CrawlerLinkObserver observer,
+                                          void *observer_context)
 {
     Crawl crawl = {0};
     UrlQueueItem item = {0};
@@ -273,6 +303,8 @@ CrawlerStatus crawler_run(const CrawlerConfig *config, CrawlerStats *stats)
     }
     crawl.config = config;
     crawl.stats = stats;
+    crawl.observer = observer;
+    crawl.observer_context = observer_context;
     normalized = url_normalize(config->start_url, &start);
     if (normalized != URL_OK) {
         return normalized == URL_ERROR_OUT_OF_MEMORY
@@ -327,4 +359,20 @@ done:
     url_free(&crawl.seed);
     free(start);
     return result;
+}
+
+CrawlerStatus crawler_run(const CrawlerConfig *config, CrawlerStats *stats)
+{
+    return crawler_run_internal(config, stats, NULL, NULL);
+}
+
+CrawlerStatus crawler_run_with_link_observer(
+    const CrawlerConfig *config, CrawlerStats *stats,
+    CrawlerLinkObserver observer, void *context)
+{
+    if (observer == NULL) {
+        if (stats != NULL) { *stats = (CrawlerStats){0}; }
+        return CRAWLER_INVALID_ARGUMENT;
+    }
+    return crawler_run_internal(config, stats, observer, context);
 }

@@ -20,6 +20,17 @@ typedef enum {
     CRAWLER_INTERNAL_ERROR  /* Container/invariant contract failure. */
 } CrawlerStatus;
 
+/*
+ * Optional per-link observation used by additive crawler integrations.
+ * URL strings are borrowed and valid only until the observer returns.
+ * Set *crawl_link to 0 to record/inspect a link without queuing it, or leave
+ * it 1 to retain normal BFS behavior. Return CRAWLER_OK to continue; return
+ * OUT_OF_MEMORY, LIMIT_REACHED or INTERNAL_ERROR to stop safely.
+ */
+typedef CrawlerStatus (*CrawlerLinkObserver)(
+    const char *source_page_url, size_t source_depth, const char *link_url,
+    int *crawl_link, void *context);
+
 /* Fixed demo-safety budgets; no extra/uninitialized config fields. */
 #define CRAWLER_MAX_PAGES ((size_t)100)
 #define CRAWLER_MAX_CANDIDATES ((size_t)1000)
@@ -51,6 +62,16 @@ typedef struct {
  * Budgets return LIMIT_REACHED, never an exhaustive-success claim.
  */
 CrawlerStatus crawler_run(const CrawlerConfig *config, CrawlerStats *stats);
+
+/*
+ * Same bounded BFS, with a synchronous observer for each valid in-scope
+ * absolute link. The observer sees links even at max_depth; ordinary links
+ * are not queued beyond max_depth. crawler_run() remains unchanged and uses
+ * no observer. No observer-owned pointer is retained by the crawler.
+ */
+CrawlerStatus crawler_run_with_link_observer(
+    const CrawlerConfig *config, CrawlerStats *stats,
+    CrawlerLinkObserver observer, void *context);
 
 /* Return a static, human-readable message; the caller must not free it. */
 const char *crawler_status_string(CrawlerStatus status);

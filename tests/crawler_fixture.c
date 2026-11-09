@@ -72,7 +72,14 @@ static unsigned route_id(const char *path)
         {"/leak", FIX_LEAK}, {"/drop", FIX_DROP},
         {"/port-redirect", FIX_PORT_REDIRECT}, {"/port-landing", FIX_PORT_LANDING},
         {"/failed-alias", FIX_FAILED_ALIAS}, {"/failed-redirect", FIX_FAILED_REDIRECT},
-        {"/nul-alias", FIX_NUL_ALIAS}, {"/nul-redirect", FIX_NUL_REDIRECT}
+        {"/nul-alias", FIX_NUL_ALIAS}, {"/nul-redirect", FIX_NUL_REDIRECT},
+        {"/doc-home", FIX_DOC_HOME}, {"/courses", FIX_DOC_COURSES},
+        {"/research", FIX_DOC_RESEARCH}, {"/doc-redirect", FIX_DOC_REDIRECT},
+        {"/docs/folder/landing", FIX_DOC_LANDING}, {"/doc-scope", FIX_DOC_SCOPE},
+        {"/doc-fail", FIX_DOC_FAIL}, {"/doc-bulk", FIX_DOC_BULK},
+        {"/doc-depth/0", FIX_DOC_DEPTH_0}, {"/doc-depth/1", FIX_DOC_DEPTH_1},
+        {"/doc-depth/2", FIX_DOC_DEPTH_2}, {"/doc-canon", FIX_DOC_CANON},
+        {"/doc-query", FIX_DOC_QUERY}
     };
     size_t i;
     unsigned number;
@@ -126,6 +133,16 @@ static size_t build_body(unsigned id, char *body, size_t capacity)
         }
         return used;
     }
+    if (id == FIX_DOC_BULK) {
+        size_t used = 0, i;
+        for (i = 0; i < 1000; ++i) {
+            written = snprintf(body + used, capacity - used,
+                "<a href='/files/document-%04zu.PDF?download=1#preview'>doc</a>", i);
+            require(written >= 0 && (size_t)written < capacity - used);
+            used += (size_t)written;
+        }
+        return used;
+    }
     switch (id) {
     case FIX_SITE: text = root; break;
     case FIX_A: text = "<a href='g'>grand</a><a href='/b'>duplicate</a>"; break;
@@ -158,6 +175,54 @@ static size_t build_body(unsigned id, char *body, size_t capacity)
         break;
     case FIX_NUL_ALIAS:
         text = "<a href='/nul-redirect'>alias</a><a href='/nul'>direct malformed target</a>";
+        break;
+    case FIX_DOC_HOME:
+        text = "<a href='/courses'>courses</a><a href='/research'>research</a>"
+               "<a href='/documents/rules.pdf'>rules</a><a href='/files/material.zip'>materials</a>";
+        break;
+    case FIX_DOC_COURSES:
+        text = "<a href='/documents/rules.pdf'>rules</a>"
+               "<a href='/documents/lecture.docx'>lecture</a>"
+               "<a href='/documents/lecture.docx#copy'>duplicate pair</a>";
+        break;
+    case FIX_DOC_RESEARCH:
+        text = "<a href='/documents/rules.pdf'>rules</a>"
+               "<a href='/documents/research.pdf'>research</a>";
+        break;
+    case FIX_DOC_LANDING:
+        text = "<a href='paper.PDF?download=1#preview'>paper</a>"
+               "<a href='../archive.ZIP'>archive</a>"
+               "<a href='/courses'>ordinary HTML</a>";
+        break;
+    case FIX_DOC_SCOPE:
+        written = snprintf(body, capacity,
+            "<a href='http://localhost:%u/files/offscope.pdf'>host</a>"
+            "<a href='http://127.0.0.1:%u/files/offport.zip'>port</a>",
+            port, crawler_fixture_refused_port());
+        require(written >= 0 && (size_t)written < capacity);
+        return (size_t)written;
+    case FIX_DOC_FAIL:
+        text = "<a href='/courses'>courses</a><a href='/missing'>broken child</a>";
+        break;
+    case FIX_DOC_CANON:
+        written = snprintf(body, capacity,
+            "<a href='http://LOCALHOST:%u/files/same.PDF?download=1'>first</a>"
+            "<a href='http://localhost:%u/files/same.PDF?download=1#section'>same pair</a>",
+            port, port);
+        require(written >= 0 && (size_t)written < capacity);
+        return (size_t)written;
+    case FIX_DOC_QUERY:
+        text = "<a href='/files/same.pdf?download=1'>one</a>"
+               "<a href='/files/same.pdf?download=2'>two</a>";
+        break;
+    case FIX_DOC_DEPTH_0:
+        text = "<a href='/doc-depth/1'>next</a><a href='/level/zero.pdf'>zero</a>";
+        break;
+    case FIX_DOC_DEPTH_1:
+        text = "<a href='/doc-depth/2'>next</a><a href='/level/one.docx'>one</a>";
+        break;
+    case FIX_DOC_DEPTH_2:
+        text = "<a href='/level/two.zip'>two</a>";
         break;
     case FIX_SCOPE_STRICT:
         written = snprintf(body, capacity,
@@ -234,7 +299,8 @@ static void serve(int fd, unsigned id)
         while (nanosleep(&delay, &delay) < 0 && errno == EINTR) {}
     }
     if (id == FIX_REDIRECT || id == FIX_OFF_REDIRECT || id == FIX_PORT_REDIRECT ||
-        id == FIX_FAILED_REDIRECT || id == FIX_NUL_REDIRECT) {
+        id == FIX_FAILED_REDIRECT || id == FIX_NUL_REDIRECT ||
+        id == FIX_DOC_REDIRECT) {
         if (id == FIX_REDIRECT) {
             (void)snprintf(location, sizeof(location), "Location: /new/page\r\n");
         } else if (id == FIX_OFF_REDIRECT) {
@@ -243,6 +309,8 @@ static void serve(int fd, unsigned id)
         } else if (id == FIX_PORT_REDIRECT) {
             (void)snprintf(location, sizeof(location),
                            "Location: http://127.0.0.1:%u/port-landing\r\n", other_port);
+        } else if (id == FIX_DOC_REDIRECT) {
+            (void)snprintf(location, sizeof(location), "Location: /docs/folder/landing\r\n");
         } else {
             (void)snprintf(location, sizeof(location), "Location: %s\r\n",
                            id == FIX_FAILED_REDIRECT ? "/missing" : "/nul");

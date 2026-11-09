@@ -13,6 +13,9 @@ make test-phase5
 make test-phase5-alloc
 make test-crawler-engine
 make test-crawler-alloc
+make test-document
+make test-document-integration
+make test-document-alloc
 ```
 
 `make` also builds the retained pipeline demo and the real `crawler-bfs` CLI.
@@ -24,8 +27,24 @@ the current demo, not an unpermissioned public-site crawl.
 
 `make test` includes the original API/URL tests, standalone HTML tests, local
 HTTP fixtures, Phase 5 tests, HTTP metadata allocation-failure tests and original live HTTP
-tests. The live suite may skip probes or fail when public network access is
+tests, plus Phase 8 document discovery tests. The live suite may skip probes or fail when public network access is
 blocked. Local fixtures use only a C server bound to loopback on a free port.
+
+Phase 8's `test-document` covers URL-path extension parsing, case, query/
+fragment handling, invalid inputs and result accessor/cleanup behavior.
+`test-document-integration` uses the existing C loopback BFS fixture to check
+root/depth discovery, unique normalized document/source pairs, preserved
+meaningful query differences, redirected relative links, same-domain/port
+filtering, partial failures, empty HTML, the 1000-result boundary and that
+recognized files are not fetched. `test-document-alloc` compiles the C project
+modules with test-only allocation wrappers, injects failure at each of 719
+observed application C-module allocation points in the controlled discovery run, and checks
+all-or-empty rollback, cleanup and a successful retry. Those wrappers are
+separate test objects and are not included in `libcrawler.a`.
+
+Run the end-to-end local demonstration with `make build/crawler-fixture` and
+`./build/crawler-fixture --documents`. It launches only the controlled C
+loopback site and the C `discover-documents` CLI.
 
 The HTML suite covers quoted/unquoted values, literal/entity-encoded query
 delimiters, malformed attributes, raw-text exclusions (including iframe),
