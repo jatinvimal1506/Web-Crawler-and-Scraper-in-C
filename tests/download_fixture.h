@@ -43,8 +43,32 @@ enum {
     DFX_EXACT_CHUNKED,
     DFX_OVERSIZE_LENGTH,
     DFX_OVERSIZE_CHUNKED,
-    DFX_HOP_BASE = 100,
-    DFX_ROUTE_COUNT = 128
+    DFX_SITE = 128,
+    DFX_COURSES,
+    DFX_RESEARCH,
+    DFX_RULES_PDF,
+    DFX_LECTURE_DOCX,
+    DFX_RESEARCH_PDF,
+    DFX_MATERIAL_ZIP,
+    DFX_EMPTY_SITE,
+    DFX_FAILURE_SITE,
+    DFX_REDIRECTED_SITE,
+    DFX_REDIRECTED_PAGE,
+    DFX_REDIRECTED_PDF,
+    DFX_SCOPE_SITE,
+    DFX_LIMIT_SITE,
+    DFX_TIMEOUT_SITE,
+    DFX_STAGING_SITE,
+    DFX_BINARY_REDIRECT_SITE,
+    DFX_ITEM_BASE = 160,
+    DFX_BFS_ROOT = 176,
+    DFX_BFS_A,
+    DFX_BFS_B,
+    DFX_BFS_GRANDCHILD,
+    DFX_PARTIAL_CRAWL_SITE = 180,
+    DFX_FAILED_HTML_CHILD,
+    DFX_HOP_BASE = 200,
+    DFX_ROUTE_COUNT = 256
 };
 
 unsigned download_fixture_start(void);
@@ -52,6 +76,8 @@ unsigned download_fixture_other_port(void);
 void download_fixture_stop(void);
 void download_fixture_reset_counts(void);
 size_t download_fixture_request_count(unsigned route);
+size_t download_fixture_request_total(void);
+unsigned download_fixture_request_order(size_t index);
 const unsigned char *download_fixture_small_data(size_t *size);
 unsigned char download_fixture_expected_byte(size_t offset);
 

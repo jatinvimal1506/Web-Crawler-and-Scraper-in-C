@@ -80,6 +80,11 @@ static ReportStatus validate_filter(const ReportFilter *filter)
     return REPORT_OK;
 }
 
+ReportStatus report_validate_filter(const ReportFilter *filter)
+{
+    return validate_filter(filter);
+}
+
 static int valid_type(DocumentType type)
 {
     return type == DOCUMENT_TYPE_PDF || type == DOCUMENT_TYPE_DOCX ||
@@ -378,6 +383,12 @@ static int valid_csv_basename(const char *filename)
     return 1;
 }
 
+ReportStatus report_validate_csv_basename(const char *safe_csv_basename)
+{
+    return valid_csv_basename(safe_csv_basename)
+        ? REPORT_OK : REPORT_ERROR_INVALID_ARGUMENT;
+}
+
 static ReportStatus make_output_path(const char *directory,
                                     const char *filename, char **output)
 {
@@ -524,7 +535,7 @@ ReportStatus report_write_csv(const char *existing_output_directory,
     }
     if (existing_output_directory == NULL ||
         existing_output_directory[0] == '\0' ||
-        !valid_csv_basename(safe_csv_basename)) {
+        report_validate_csv_basename(safe_csv_basename) != REPORT_OK) {
         status = REPORT_ERROR_INVALID_ARGUMENT;
         goto done;
     }

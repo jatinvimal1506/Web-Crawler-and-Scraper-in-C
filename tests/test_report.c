@@ -174,6 +174,8 @@ static void test_invalid_filters_and_rows(void)
 
 static void test_status_names(void)
 {
+    static const char *const valid_keywords[] = {"report"};
+    ReportFilter valid_filter = {valid_keywords, 1U};
     CHECK(strcmp(report_row_status_name(REPORT_ROW_DOWNLOADED_NEW),
                  "DOWNLOADED_NEW") == 0);
     CHECK(strcmp(report_row_status_name(REPORT_ROW_DUPLICATE),
@@ -184,6 +186,11 @@ static void test_status_names(void)
                  "SKIPPED_LIMIT") == 0);
     CHECK(report_status_message(REPORT_OK) != NULL);
     CHECK(report_status_message((ReportStatus)-1) != NULL);
+    CHECK(report_validate_filter(&valid_filter) == REPORT_OK);
+    CHECK(report_validate_filter(NULL) == REPORT_ERROR_INVALID_FILTER);
+    CHECK(report_validate_csv_basename("report.csv") == REPORT_OK);
+    CHECK(report_validate_csv_basename("../report.csv") ==
+          REPORT_ERROR_INVALID_ARGUMENT);
 }
 
 int main(void)

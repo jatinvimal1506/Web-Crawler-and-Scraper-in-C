@@ -52,7 +52,6 @@ typedef struct {
     const char *error_detail;
 } ReportRow;
 
-/* The caller owns the array, not the keyword strings; matching never edits them. */
 /* The caller owns the array, not the strings; each keyword is 1-64 printable
  * ASCII bytes and matching never edits them. */
 typedef struct {
@@ -74,6 +73,10 @@ const char *report_row_status_name(ReportRowStatus status);
 ReportStatus report_result_init(ReportResult *result);
 /* Free the owned path, reset the result; safe for NULL and repeated calls. */
 void report_result_free(ReportResult *result);
+
+/* Validate filter and filename values without allocation or filesystem access. */
+ReportStatus report_validate_filter(const ReportFilter *filter);
+ReportStatus report_validate_csv_basename(const char *safe_csv_basename);
 
 /*
  * Match one metadata row against zero to eight ASCII literal substrings.

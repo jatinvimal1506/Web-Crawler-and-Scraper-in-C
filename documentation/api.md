@@ -154,7 +154,8 @@ The C CLI is `build/download-document`:
 
 It handles one document only. Phase 10 separately hashes and organizes an
 already-completed local file; this downloader CLI does not invoke that API.
-Phase 12 bounded orchestration remains pending.
+Phase 12 composes discovery, selection, downloads, organization and reporting;
+see the pipeline API below.
 
 ## Phase 10 SHA-256 and file organization API
 
@@ -202,9 +203,9 @@ for diagnosis.
 
 POSIX builds reject symlink input/root/type directories. Windows junction or
 reparse-point detection is not guaranteed by the current CRT implementation.
-The module handles one local file only; it does not crawl directories or
-invoke the standalone Phase 11 report API or Phase 12 orchestration. See
-[`phase10.md`](phase10.md) for beginner-oriented examples and test descriptions.
+The module handles one local file only; it does not crawl directories or invoke
+the standalone Phase 11 report API. Phase 12 composes it with the other modules.
+See [`phase10.md`](phase10.md) for beginner-oriented examples and test descriptions.
 
 ## Phase 11 metadata filter and CSV API
 
@@ -219,8 +220,7 @@ these functions:
   the structure, and is safe for NULL/repeated cleanup.
 - `report_row_matches(row, filter, matches)` checks only the borrowed document
   URL and source-page URL. `matches` is set to zero before validation. It does
-  no I/O or allocation, so Phase 12 can call it before download outcomes are
-  known.
+  no I/O or allocation, so Phase 12 calls it before download outcomes are known.
 - `report_write_csv(directory, basename, rows, count, filter, result)` checks
   the full row values and writes a new report file. Inputs and all row/keyword
   strings are borrowed for the call.
@@ -265,6 +265,68 @@ the writer removes only the new file created by this call; if removal fails,
 also owns its path. Release either with `report_result_free`. CSV filesystem and
 fault-injection tests use POSIX temporary directories; native Windows execution
 and Windows junction behavior are not verified here.
+
+## Phase 12 bounded pipeline API
+
+`include/pipeline.h` declares the orchestration API:
+
+- `pipeline_result_init(result)` initializes fresh or already-freed storage
+  without allocating. Begin with `{0}`. Do not reinitialize a live result.
+- `pipeline_run(config, result)` performs bounded document discovery,
+  metadata filtering, selected downloads, file organization/deduplication, and
+  CSV reporting. Configuration strings and keyword strings are borrowed for the
+  duration of the call.
+- `pipeline_result_free(result)` releases `report_path` and any
+  `orphaned_paths`, clears the result, and is safe for NULL/repeated cleanup.
+- `pipeline_status_message(status)` returns a static string; do not free it.
+
+`PipelineConfig` requires an absolute HTTP(S) seed URL, an existing trusted
+output directory, and a safe `.csv` basename. It carries the unchanged crawler
+depth and exact-host/seed-port scope policy, a 1–3600 second per-request timeout,
+and zero through eight borrowed keywords. The CLI uses a fixed three-second
+timeout and accepts depths 0–3.
+
+The pipeline retains first-discovery order. It filters source/document
+relationships by literal, case-insensitive metadata URL matching before any
+document download. It downloads a selected unique document URL at most once,
+up to ten unique URLs, then passes the temporary file to the existing
+content-based organizer. Matching source relationships remain separate CSV
+rows. `successful_document_bytes_downloaded` includes successful downloads
+whose bytes were already stored; `bytes_newly_stored` counts only newly created
+organized files. `csv_rows_written` counts data rows, not the header.
+
+The other `PipelineStats` fields count successful/failed HTML pages, emitted
+hrefs, unique document URLs, document/source relationships, selected URLs and
+relationships, new files, byte-identical duplicates, failed document
+downloads, and documents skipped after the ten-document cap. Counts are checked
+for overflow. The HTML crawl also has its existing 100-page, 1000-candidate and
+1000-key bounds. `PIPELINE_LIMIT_REACHED` takes precedence when a configured
+budget is reached; otherwise recoverable crawl or document failures produce
+`PIPELINE_PARTIAL`. Fatal allocation, report, filesystem, crawl-invariant, or
+overflow failures return explicit error statuses. A partial/limit result is not
+a claim of exhaustive coverage.
+
+`PipelineResult` owns no caller configuration strings. It owns `report_path`
+when a report was created (including a cleanup-failure case) and owns any
+`orphaned_paths` that could not be removed; inspect and remove those manually
+when appropriate. No other allocation escapes `pipeline_run`. Output-root and
+report collisions are checked before the first request. Download staging names
+are created exclusively, and failed operations remove only files created by
+that run.
+
+The C CLI is `build/deepdownload`:
+
+```sh
+./build/deepdownload START_URL OUTPUT_ROOT REPORT.csv [DEPTH 0..3] \
+  [SAME_DOMAIN 0|1] [--keyword WORD]...
+```
+
+Exit code 0 means `PIPELINE_OK`, 1 means partial results or a configured limit,
+and 2 means invalid input or a fatal error. See
+[`phase12.md`](phase12.md) for examples, full beginner explanations, resource
+ceilings, and deterministic test coverage. The pipeline does not inspect
+document contents, download beyond the existing ten-document cap, or implement
+any later phase.
 
 ## Part 2 URL API
 

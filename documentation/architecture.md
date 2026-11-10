@@ -24,23 +24,29 @@ The project keeps the library and demonstration application separate. The Makefi
   content deduplication, exclusive creation and post-copy verification.
 - `report.c` / `report.h`: Phase 11 metadata-only keyword filtering and
   bounded, formula-safe CSV writing with source-page rows preserved.
+- `pipeline.c` / `pipeline.h`: Phase 12 orchestration from bounded discovery
+  through filtering, downloads, content organization and provenance CSV.
 - `examples/demo.c`: Part 1 CLI that validates its arguments and demonstrates the current API status.
 - `examples/demo_pipeline.c`: presentation demo that calls the crawler API, URL parser, and downloader in sequence.
 - `examples/discover_documents.c`: Phase 8 CLI for a controlled URL/depth
   discovery run; it does not save binary files.
 - `examples/download_document.c`: Phase 9 CLI for one caller-selected file;
   it never downloads all Phase 8 results.
+- `examples/deepdownload.c`: Phase 12 bounded end-to-end CLI; it reports all
+  pipeline counters and distinguishes complete, partial/limited and fatal runs.
 
 ## Current integration boundary
 
-`crawler_run` now connects URL, queue, visited, HTTP and HTML modules. A FIFO
-stores canonical URL/depth pairs; scheduled and attempted/known-final sets
-prevent repeated scheduling and skip known queued redirect aliases.
-Queue/visited APIs and implementations are unchanged. HTTP keeps its original
+`crawler_run` connects URL, queue, visited, HTTP and HTML modules. A FIFO stores
+canonical URL/depth pairs; scheduled and attempted/known-final sets prevent
+repeated scheduling and skip known queued redirect aliases. Queue/visited APIs
+and implementations remain independent and reusable. HTTP keeps its original
 signature and adds a scoped entry point; both reuse one checked transport.
-HTML gains a bounded-output entry point while keeping its original API.
-The legacy pipeline still calls standalone URL/HTTP functions in addition to
-its root-only crawler call; use crawler-bfs and the C loopback fixture for BFS.
+HTML gains a bounded-output entry point while keeping its original API. The
+Phase 12 `pipeline_run` composes discovery with filtering, document downloads,
+organization/deduplication and CSV reporting. The legacy `demo_pipeline` still
+demonstrates individual APIs in sequence; use `deepdownload` and the controlled
+C loopback fixture for the integrated flow.
 `document_discover` uses the additive `crawler_run_with_link_observer` hook so
 it sees each resolved, normalized, in-scope href before the crawler decides
 whether to queue it as an HTML page. The observer records recognized document
@@ -156,9 +162,46 @@ alternatives and policy trade-offs.
 
 Phase 9 remains a one-document transfer API; Phase 10 separately hashes and
 organizes one completed local file. Neither phase parses PDF/DOCX/ZIP internals.
-Phase 11 below provides a reusable metadata filter and CSV writer but does not
-connect them to crawling/downloading. Phase 12 end-to-end orchestration remains
-pending and must pass its own acceptance gate.
+Phase 11 provides reusable metadata filtering and CSV writing; Phase 12 below
+connects them to crawler discovery and file organization.
+
+## Implemented Phase 12: bounded end-to-end pipeline
+
+`pipeline_run` validates the borrowed configuration and checks the requested
+report path before making network requests. It then runs the existing document
+discovery API, selects document/source relationships by URL metadata, downloads
+each selected unique document URL at most once (no more than ten), organizes
+the completed temporary file by content hash, and writes one CSV row per
+selected provenance relationship. Identical content already stored in the
+output root is reported as a duplicate and is not copied again.
+
+The pipeline uses a private staging directory under an existing trusted output
+root. Candidate staging names are exclusively created; collisions do not
+overwrite user files. On ordinary failures, only files created by that run are
+removed. If cleanup itself fails, `PipelineResult` owns the remaining path so
+the caller can locate it. It also owns the created report path; configuration
+strings are borrowed and no other heap pointer escapes. Call
+`pipeline_result_free` on every exit path.
+
+`PipelineStats` distinguishes visited/failed HTML pages and discovered hrefs
+from document URLs/relationships, selected relationships, new versus
+duplicate-content files, download failures, skipped-limit items, transferred
+bytes, newly stored bytes and written CSV data rows. Successful downloaded
+bytes include duplicates; newly stored bytes do not. A partial crawl or
+document failure returns `PIPELINE_PARTIAL`; a reached budget returns
+`PIPELINE_LIMIT_REACHED` (which takes precedence over partial). Fatal
+configuration, allocation, report, filesystem, crawl or internal-invariant
+errors return explicit error statuses. A limit or partial result is never
+described as exhaustive success.
+
+The existing crawler remains bounded to 100 attempted HTML pages, 1000
+candidate hrefs and 1000 scheduled/alias keys. The pipeline additionally
+attempts no more than ten selected unique document URLs; the existing document
+stream limit remains 20 MiB per file. Its depth-limited CLI accepts 0–3, uses a
+three-second per-request timeout and requires a controlled/permissioned site.
+No document contents are parsed; no AI, GUI, browser automation, concurrency or
+later phase is included. `make test-pipeline-integration` runs the real CLI
+against a local C fixture rather than contacting a public website.
 
 ## Phase 10 local hashing and organization
 

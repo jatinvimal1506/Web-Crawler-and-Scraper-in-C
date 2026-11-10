@@ -37,9 +37,10 @@
 - Entity-aware unquoted query context (`&#63;`, hexadecimal references, `&quest;`).
 - Beginner guide: `documentation/phase4.md`.
 
-## Deferred beyond Phase 11
+## Current overall status
 
-- Final bulk orchestration.
+- Phase 12 connects the existing discovery, download, organization and report
+  modules in a bounded C11 pipeline.
 
 Phases 1–11 are implemented, including bounded BFS through `crawler_run`, the
 single-document streamer, one-file local organization, and metadata filtering/
@@ -153,9 +154,8 @@ Phase 7 was subsequently explicitly approved and implemented:
   and actual acceptance evidence.
 - POSIX filesystem integration/fault tests skip on native Windows; Windows
   runtime and junction/reparse-point protections are not verified here.
-- Phase 11 below adds standalone metadata keyword filtering and CSV reporting.
-  Phase 12 end-to-end orchestration remains separately gated. Phase 10 is not a
-  crawler-to-file bulk pipeline.
+- Phase 11 adds standalone metadata keyword filtering and CSV reporting. Phase
+  12 connects these modules; Phase 10 remains a separate one-file library.
 
 ## Part 11 — Metadata filtering and CSV reporting
 
@@ -179,5 +179,33 @@ Phase 7 was subsequently explicitly approved and implemented:
   allocator/write/close/cleanup failure tests are included in `make test`.
 - POSIX filesystem/fault fixtures skip on native Windows; Windows execution
   remains NOT VERIFIED. Metadata filtering never parses downloaded contents.
-- Phase 12 is still pending. Full decisions and measured handoff:
-  `../prompt history/2026-11-09-phase11-design-and-handoff.md`.
+- Phase 12 below integrates the modules. The Phase 11 handoff remains a
+  historical record of its separate standalone API.
+
+## Part 12 — bounded end-to-end pipeline
+
+- New `PipelineConfig`, `PipelineStats`, `PipelineResult` and `pipeline_run`
+  API; the pre-existing module APIs and crawler configuration remain intact.
+- Runs bounded document discovery, selects by up to eight metadata keywords,
+  downloads at most ten selected unique document URLs, organizes/deduplicates
+  bytes, then writes a provenance CSV.
+- Maintains document/source relationship rows and discovery order. Partial
+  crawl or document failures and resource limits have distinct non-success
+  statuses; fatal allocation, filesystem, report and invariant errors abort.
+- Existing safety bounds still apply: 100 attempted HTML pages, 1000 candidate
+  hrefs/scheduled URL keys, 20 MiB per document, 1–3600 second per-request
+  timeout. The pipeline adds a ten-document attempt ceiling.
+- Owned result paths are documented and freed by `pipeline_result_free`;
+  caller configuration strings remain borrowed. Staging names are exclusive,
+  pre-existing reports are never overwritten, and cleanup failures retain paths
+  for inspection.
+- Added C-only API, C-loopback end-to-end/CLI, BFS-order/depth, filtering,
+  redirect, failure/limit and allocation-failure tests. A new controlled
+  CLI execution is captured by the integration test.
+- Linux build/tests are measured in the Phase 12 handoff. Native Windows and
+  full process-wide leak scanning remain unverified where tools are unavailable.
+- Complete instruction is preserved in
+  `../prompt history/2026-11-09-phases10-12-master-instruction.md`; Phase 12
+  decisions and measured acceptance evidence are in
+  `../prompt history/2026-11-09-phase12-design-and-handoff.md`.
+- No Phase 13 or later work is included.

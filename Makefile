@@ -5,7 +5,7 @@ CFLAGS += -std=c11 -Wall -Wextra -Wpedantic -Iinclude
 LDLIBS ?= -lcurl
 BUILD := build
 LIB := $(BUILD)/libcrawler.a
-SOURCES := src/project.c src/url.c src/http.c src/http_scoped.c src/html.c src/queue.c src/visited.c src/document.c src/download.c src/sha256.c src/organize.c src/report.c
+SOURCES := src/project.c src/url.c src/http.c src/http_scoped.c src/html.c src/queue.c src/visited.c src/document.c src/download.c src/sha256.c src/organize.c src/report.c src/pipeline.c
 OBJECTS := $(SOURCES:src/%.c=$(BUILD)/%.o)
 # Retain native cmd.exe behavior on Windows; use POSIX commands on Linux.
 ifeq ($(OS),Windows_NT)
@@ -24,6 +24,7 @@ BFS_DEMO := $(BUILD)/crawler-bfs$(EXE)
 CRAWLER_FIXTURE := $(BUILD)/crawler-fixture$(EXE)
 DOCUMENT_DEMO := $(BUILD)/discover-documents$(EXE)
 DOWNLOAD_DEMO := $(BUILD)/download-document$(EXE)
+DEEPDOWNLOAD_CLI := $(BUILD)/deepdownload$(EXE)
 TEST := $(BUILD)/test-crawler$(EXE)
 URL_TEST := $(BUILD)/test-url$(EXE)
 HTTP_TEST := $(BUILD)/test-http$(EXE)
@@ -48,13 +49,16 @@ ORGANIZE_ALLOC_TEST := $(BUILD)/test-organize-alloc$(EXE)
 REPORT_TEST := $(BUILD)/test-report$(EXE)
 REPORT_CSV_TEST := $(BUILD)/test-report-csv$(EXE)
 REPORT_ALLOC_TEST := $(BUILD)/test-report-alloc$(EXE)
+PIPELINE_TEST := $(BUILD)/test-pipeline$(EXE)
+PIPELINE_INTEGRATION_TEST := $(BUILD)/test-pipeline-integration$(EXE)
+PIPELINE_ALLOC_TEST := $(BUILD)/test-pipeline-alloc$(EXE)
 CRAWLER_ALLOC_TEST := $(BUILD)/test-crawler-alloc$(EXE)
 CRAWLER_ENGINE_TEST := $(BUILD)/test-crawler-engine$(EXE)
 TEST_HEADERS := tests/phase5_check.h
 HEADERS := $(wildcard include/*.h) src/http_internal.h
 
-.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local test-http-alloc test-phase5 test-phase5-alloc test-crawler-engine test-crawler-alloc test-phase7-safety test-phase7-alloc test-document test-document-integration test-document-alloc test-download test-download-integration test-download-alloc test-sha256 test-organize test-organize-integration test-organize-alloc test-report test-report-csv test-report-alloc
-all: $(LIB) $(DEMO) $(PIPELINE_DEMO) $(BFS_DEMO) $(DOCUMENT_DEMO) $(DOWNLOAD_DEMO)
+.PHONY: all clean test test-unit test-http test-html test-html-alloc test-http-local test-http-alloc test-phase5 test-phase5-alloc test-crawler-engine test-crawler-alloc test-phase7-safety test-phase7-alloc test-document test-document-integration test-document-alloc test-download test-download-integration test-download-alloc test-sha256 test-organize test-organize-integration test-organize-alloc test-report test-report-csv test-report-alloc test-pipeline test-pipeline-integration test-pipeline-alloc
+all: $(LIB) $(DEMO) $(PIPELINE_DEMO) $(BFS_DEMO) $(DOCUMENT_DEMO) $(DOWNLOAD_DEMO) $(DEEPDOWNLOAD_CLI)
 
 $(BUILD):
 ifeq ($(OS),Windows_NT)
@@ -82,6 +86,9 @@ $(DOCUMENT_DEMO): examples/discover_documents.c $(LIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LDLIBS) -o $@
 
 $(DOWNLOAD_DEMO): examples/download_document.c $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LDLIBS) -o $@
+
+$(DEEPDOWNLOAD_CLI): examples/deepdownload.c $(LIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LDLIBS) -o $@
 
 $(CRAWLER_FIXTURE): tests/crawler_fixture_main.c tests/crawler_fixture.c tests/crawler_fixture.h $(LIB) $(BFS_DEMO) $(DOCUMENT_DEMO)
@@ -158,7 +165,7 @@ test-crawler-alloc: $(CRAWLER_ALLOC_TEST)
 
 # Unit tests need no sockets. Local fixtures need loopback, not Internet access.
 # The original HTTP suite still uses public network endpoints.
-test: test-unit test-phase5-alloc test-crawler-engine test-crawler-alloc test-http-local test-http-alloc test-phase7-safety test-phase7-alloc test-document test-document-integration test-document-alloc test-download test-download-integration test-download-alloc test-sha256 test-organize test-organize-integration test-organize-alloc test-report test-report-csv test-report-alloc test-http
+test: test-unit test-phase5-alloc test-crawler-engine test-crawler-alloc test-http-local test-http-alloc test-phase7-safety test-phase7-alloc test-document test-document-integration test-document-alloc test-download test-download-integration test-download-alloc test-sha256 test-organize test-organize-integration test-organize-alloc test-report test-report-csv test-report-alloc test-pipeline test-pipeline-integration test-pipeline-alloc test-http
 
 test-unit: $(TEST) $(URL_TEST) $(HTML_TEST) test-phase5
 	$(RUN)test-crawler$(EXE)
@@ -304,6 +311,28 @@ test-report-csv: $(REPORT_CSV_TEST)
 
 test-report-alloc: $(REPORT_ALLOC_TEST)
 	$(RUN)test-report-alloc$(EXE)
+
+# Phase 12 end-to-end pipeline unit, local HTTP integration, and allocator tests.
+$(PIPELINE_TEST): tests/test_pipeline.c $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) $< $(LIB) $(LDLIBS) -o $@
+
+$(PIPELINE_INTEGRATION_TEST): tests/test_pipeline_integration.c tests/download_fixture.c tests/download_fixture.h $(DEEPDOWNLOAD_CLI) $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) tests/test_pipeline_integration.c tests/download_fixture.c $(LIB) $(LDLIBS) -o $@
+
+$(BUILD)/pipeline-alloc-pipeline.o: src/pipeline.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) -Dmalloc=pipeline_test_malloc -Dfree=pipeline_test_free -Dremove=pipeline_test_remove -Dreport_write_csv=pipeline_test_report_write_csv -c $< -o $@
+
+$(PIPELINE_ALLOC_TEST): tests/test_pipeline_alloc.c tests/download_fixture.c tests/download_fixture.h $(BUILD)/pipeline-alloc-pipeline.o $(LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) tests/test_pipeline_alloc.c tests/download_fixture.c $(BUILD)/pipeline-alloc-pipeline.o $(LIB) $(LDLIBS) -o $@
+
+test-pipeline: $(PIPELINE_TEST)
+	$(RUN)test-pipeline$(EXE)
+
+test-pipeline-integration: $(PIPELINE_INTEGRATION_TEST)
+	$(RUN)test-pipeline-integration$(EXE) $(RUN)deepdownload$(EXE)
+
+test-pipeline-alloc: $(PIPELINE_ALLOC_TEST)
+	$(RUN)test-pipeline-alloc$(EXE)
 
 # Optional: requires a GNU-compatible linker (Linux or MSYS2).
 $(BUILD)/test-html-alloc$(EXE): tests/test_html_alloc.c src/html.c src/url.c $(HEADERS) | $(BUILD)

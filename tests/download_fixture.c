@@ -10,6 +10,12 @@ unsigned download_fixture_other_port(void) { return 0; }
 void download_fixture_stop(void) {}
 void download_fixture_reset_counts(void) {}
 size_t download_fixture_request_count(unsigned route) { (void)route; return 0; }
+size_t download_fixture_request_total(void) { return 0U; }
+unsigned download_fixture_request_order(size_t index)
+{
+    (void)index;
+    return DFX_ROUTE_COUNT;
+}
 const unsigned char *download_fixture_small_data(size_t *size)
 {
     static const unsigned char data[] = {0, 255, 128, 65, 10, 0, 239, 66};
@@ -25,6 +31,7 @@ unsigned char download_fixture_expected_byte(size_t offset)
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,6 +51,10 @@ static int request_writer = -1;
 static unsigned primary_port;
 static unsigned secondary_port;
 static size_t route_counts[DFX_ROUTE_COUNT];
+#define FIXTURE_REQUEST_HISTORY ((size_t)2048)
+static unsigned request_history[FIXTURE_REQUEST_HISTORY];
+static size_t request_history_count;
+static size_t request_total;
 
 static void require(int condition)
 {
@@ -112,7 +123,30 @@ static unsigned identify_route(char *path)
         {"/files/exact.pdf", DFX_EXACT_LENGTH},
         {"/files/exact-chunked.pdf", DFX_EXACT_CHUNKED},
         {"/files/oversize.pdf", DFX_OVERSIZE_LENGTH},
-        {"/files/oversize-chunked.pdf", DFX_OVERSIZE_CHUNKED}
+        {"/files/oversize-chunked.pdf", DFX_OVERSIZE_CHUNKED},
+        {"/site", DFX_SITE},
+        {"/courses", DFX_COURSES},
+        {"/research", DFX_RESEARCH},
+        {"/docs/rules.pdf", DFX_RULES_PDF},
+        {"/docs/lecture.docx", DFX_LECTURE_DOCX},
+        {"/docs/research.pdf", DFX_RESEARCH_PDF},
+        {"/files/material.zip", DFX_MATERIAL_ZIP},
+        {"/empty-site", DFX_EMPTY_SITE},
+        {"/failure-site", DFX_FAILURE_SITE},
+        {"/redirected-site", DFX_REDIRECTED_SITE},
+        {"/dir/site.html", DFX_REDIRECTED_PAGE},
+        {"/dir/docs/redirected.pdf", DFX_REDIRECTED_PDF},
+        {"/scope-site", DFX_SCOPE_SITE},
+        {"/limit-site", DFX_LIMIT_SITE},
+        {"/timeout-site", DFX_TIMEOUT_SITE},
+        {"/staging-site", DFX_STAGING_SITE},
+        {"/binary-redirect-site", DFX_BINARY_REDIRECT_SITE},
+        {"/bfs-root", DFX_BFS_ROOT},
+        {"/bfs-a", DFX_BFS_A},
+        {"/bfs-b", DFX_BFS_B},
+        {"/bfs-grandchild", DFX_BFS_GRANDCHILD},
+        {"/partial-crawl-site", DFX_PARTIAL_CRAWL_SITE},
+        {"/failed-html-child", DFX_FAILED_HTML_CHILD}
     };
     size_t i;
     unsigned number;
@@ -125,6 +159,11 @@ static unsigned identify_route(char *path)
     if (sscanf(path, "/hop/%u.pdf%n", &number, &consumed) == 1 &&
         path[consumed] == '\0' && number < 7) {
         return DFX_HOP_BASE + number;
+    }
+    consumed = 0;
+    if (sscanf(path, "/files/item-%u.pdf%n", &number, &consumed) == 1 &&
+        path[consumed] == '\0' && number < 11U) {
+        return DFX_ITEM_BASE + number;
     }
     return 0;
 }
@@ -183,12 +222,127 @@ static int send_pattern(int fd, size_t total, int chunked)
 static void serve_request(int fd, unsigned route)
 {
     static const unsigned char small[] = {0, 255, 128, 65, 10, 0, 239, 66};
+    static const unsigned char rules[] = "shared-pdf-bytes";
+    static const unsigned char lecture[] = "lecture-docx";
+    static const unsigned char archive[] = "archive-zip";
     const char *mime = "application/pdf";
     const char *location = NULL;
+    const char *html_body = NULL;
+    const unsigned char *body = small;
+    unsigned char item_body[8];
+    char dynamic_html[2048] = {0};
     char header[1024];
     size_t body_size = sizeof(small), advertised_size = body_size;
     int status = 200, chunked = 0, written;
     int special = 0;
+    size_t index;
+
+    if (route == DFX_SITE) {
+        mime = "text/html";
+        html_body = "<a href='/courses'>Courses</a><a href=\"/research\">Research</a>"
+                    "<a href='/docs/rules.pdf'>Rules</a>"
+                    "<a href='/docs/rules.pdf#chapter'>Rules duplicate</a>"
+                    "<a href='/files/material.zip'>Archive</a>";
+    } else if (route == DFX_COURSES) {
+        mime = "text/html";
+        html_body = "<a href='/docs/rules.pdf'>Rules</a>"
+                    "<a href='/docs/lecture.docx'>Lecture</a>";
+    } else if (route == DFX_RESEARCH) {
+        mime = "text/html";
+        html_body = "<a href='/docs/rules.pdf'>Rules</a>"
+                    "<a href='/docs/research.pdf'>Research PDF</a>";
+    } else if (route == DFX_EMPTY_SITE) {
+        mime = "text/html";
+        html_body = "";
+    } else if (route == DFX_FAILURE_SITE) {
+        mime = "text/html";
+        html_body = "<a href='/files/not-found.pdf'>404</a>"
+                    "<a href='/files/server-error.pdf'>500</a>"
+                    "<a href='/files/wrong.pdf'>Wrong MIME</a>"
+                    "<a href='/files/empty.pdf'>Empty</a>"
+                    "<a href='/files/no-type.pdf'>Missing MIME</a>"
+                    "<a href='/redirect-404.pdf'>Redirect to 404</a>"
+                    "<a href='/redirect-wrong.pdf'>Redirect to wrong MIME</a>"
+                    "<a href='/files/partial.pdf'>Interrupted body</a>";
+    } else if (route == DFX_REDIRECTED_PAGE) {
+        mime = "text/html";
+        html_body = "<a href='docs/redirected.pdf'>Redirect-relative PDF</a>";
+    } else if (route == DFX_SCOPE_SITE) {
+        mime = "text/html";
+        html_body = "<a href='/off-host.pdf'>Host restricted</a>"
+                    "<a href='/localhost-redirect.pdf'>Host permitted when unrestricted</a>"
+                    "<a href='/off-port.pdf'>Port restricted</a>";
+    } else if (route == DFX_TIMEOUT_SITE) {
+        mime = "text/html";
+        html_body = "<a href='/files/slow.pdf'>Slow PDF</a>";
+    } else if (route == DFX_STAGING_SITE) {
+        mime = "text/html";
+        html_body = "<a href='/files/small.pdf'>Small PDF</a>";
+    } else if (route == DFX_BINARY_REDIRECT_SITE) {
+        mime = "text/html";
+        html_body = "<a href='/redir/start.pdf'>Relative redirect PDF</a>";
+    } else if (route == DFX_BFS_ROOT) {
+        mime = "text/html";
+        html_body = "<a href='/bfs-a'>A</a><a href='/bfs-b'>B</a>";
+    } else if (route == DFX_BFS_A) {
+        mime = "text/html";
+        html_body = "<a href='/bfs-grandchild'>Grandchild</a>";
+    } else if (route == DFX_BFS_B) {
+        mime = "text/html";
+        html_body = "";
+    } else if (route == DFX_BFS_GRANDCHILD) {
+        mime = "text/html";
+        html_body = "<a href='/files/small.pdf'>Depth two PDF</a>";
+    } else if (route == DFX_PARTIAL_CRAWL_SITE) {
+        mime = "text/html";
+        html_body = "<a href='/docs/rules.pdf'>Keep this document</a>"
+                    "<a href='/failed-html-child'>Fail this child page</a>";
+    } else if (route == DFX_FAILED_HTML_CHILD) {
+        mime = "text/html";
+        html_body = "<a href='/docs/lecture.docx'>Must not be parsed</a>";
+    } else if (route == DFX_LIMIT_SITE) {
+        mime = "text/html";
+        for (index = 0U; index < 11U; ++index) {
+            size_t used = strlen(dynamic_html);
+            int amount = snprintf(dynamic_html + used,
+                                  sizeof(dynamic_html) - used,
+                                  "<a href='/files/item-%zu.pdf'>Item %zu</a>",
+                                  index, index);
+            require(amount > 0 &&
+                    (size_t)amount < sizeof(dynamic_html) - used);
+        }
+        html_body = dynamic_html;
+    }
+    if (html_body != NULL) {
+        body = (const unsigned char *)html_body;
+        body_size = strlen(html_body);
+        advertised_size = body_size;
+    } else if (route == DFX_RULES_PDF || route == DFX_RESEARCH_PDF) {
+        body = rules;
+        body_size = sizeof(rules) - 1U;
+        advertised_size = body_size;
+    } else if (route == DFX_LECTURE_DOCX) {
+        mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        body = lecture;
+        body_size = sizeof(lecture) - 1U;
+        advertised_size = body_size;
+    } else if (route == DFX_MATERIAL_ZIP) {
+        mime = "application/zip";
+        body = archive;
+        body_size = sizeof(archive) - 1U;
+        advertised_size = body_size;
+    } else if (route == DFX_REDIRECTED_PDF || route == DFX_HOST_TARGET) {
+        body = small;
+    } else if (route >= DFX_ITEM_BASE && route < DFX_ITEM_BASE + 11U) {
+        mime = "application/pdf";
+        for (index = 0U; index < sizeof(item_body); ++index) {
+            item_body[index] = (unsigned char)(route + (unsigned)index);
+        }
+        body = item_body;
+        body_size = sizeof(item_body);
+        advertised_size = body_size;
+    }
+
     if (route == DFX_DOCX) { mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"; }
     if (route == DFX_ZIP) { mime = "application/zip"; }
     if (route == DFX_ZIP_ALT) { mime = "application/x-zip-compressed; version=1"; }
@@ -199,6 +353,7 @@ static void serve_request(int fd, unsigned route)
     if (route == DFX_MISSING_MIME) { mime = NULL; }
     if (route == DFX_EMPTY) { body_size = 0; advertised_size = 0; }
     if (route == DFX_NOT_FOUND) { status = 404; }
+    if (route == DFX_FAILED_HTML_CHILD) { status = 404; }
     if (route == DFX_SERVER_ERROR) { status = 500; }
     if (route == DFX_PARTIAL_CONTENT) { status = 206; }
     if (route == DFX_PARTIAL) { advertised_size = 64; body_size = 8; special = 1; }
@@ -206,6 +361,10 @@ static void serve_request(int fd, unsigned route)
     if (route == DFX_DROP) { return; }
 
     if (route == DFX_RELATIVE_REDIRECT) { location = "../files/small.pdf"; status = 302; }
+    if (route == DFX_REDIRECTED_SITE) {
+        location = "/dir/site.html";
+        status = 302;
+    }
     if (route >= DFX_REDIRECT_301 && route <= DFX_REDIRECT_308) {
         static const int codes[] = {301, 302, 303, 307, 308};
         status = codes[route - DFX_REDIRECT_301];
@@ -293,14 +452,16 @@ static void serve_request(int fd, unsigned route)
         (void)send_pattern(fd, body_size, 1);
     } else if (route == DFX_EXACT_LENGTH || route == DFX_OVERSIZE_LENGTH) {
         (void)send_pattern(fd, body_size, 0);
-    } else {
+    } else if (body == small) {
         size_t offset = 0;
         while (offset < body_size) {
             size_t amount = body_size - offset;
-            if (amount > 3) { amount = 3; }
-            if (!send_all(fd, small + offset, amount)) { break; }
+            if (amount > 3U) { amount = 3U; }
+            if (!send_all(fd, body + offset, amount)) { break; }
             offset += amount;
         }
+    } else {
+        (void)send_all(fd, body, body_size);
     }
 }
 
@@ -394,7 +555,13 @@ static void drain_counts(void)
         if (got < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) { break; }
         if (got == 0) { break; }
         require(got == (ssize_t)sizeof(route));
-        if (route < DFX_ROUTE_COUNT) { ++route_counts[route]; }
+        if (route < DFX_ROUTE_COUNT) {
+            ++route_counts[route];
+            if (request_history_count < FIXTURE_REQUEST_HISTORY) {
+                request_history[request_history_count++] = route;
+            }
+            if (request_total != SIZE_MAX) { ++request_total; }
+        }
     }
 }
 
@@ -402,11 +569,26 @@ void download_fixture_reset_counts(void)
 {
     drain_counts();
     memset(route_counts, 0, sizeof(route_counts));
+    request_history_count = 0U;
+    request_total = 0U;
 }
 
 size_t download_fixture_request_count(unsigned route)
 {
     drain_counts();
     return route < DFX_ROUTE_COUNT ? route_counts[route] : 0;
+}
+
+size_t download_fixture_request_total(void)
+{
+    drain_counts();
+    return request_total;
+}
+
+unsigned download_fixture_request_order(size_t index)
+{
+    drain_counts();
+    return index < request_history_count
+        ? request_history[index] : DFX_ROUTE_COUNT;
 }
 #endif

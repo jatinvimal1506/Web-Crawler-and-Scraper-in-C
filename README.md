@@ -1,12 +1,10 @@
 # DeepDownload-C
 
 This university project is a reusable C11 static library with separate C CLI
-demos. Phases 1–8 provide the crawler, URL/HTTP/HTML modules, reusable queue
-and visited set, bounded BFS, and PDF/DOCX/ZIP link discovery with provenance.
-Phase 9 adds a separate, one-document binary streamer. Phase 10 hashes and
-organizes one completed file at a time. Phase 11 filters discovered URL
-metadata by keywords and writes safe CSV reports. Phase 12's full workflow
-integration remains pending.
+demos. Phases 1–12 include the crawler, URL/HTTP/HTML modules, reusable queue
+and visited set, bounded BFS, PDF/DOCX/ZIP link discovery, one-document
+streaming, local hashing/organization, metadata filtering, CSV reporting, and
+the bounded end-to-end pipeline. No Phase 13 or later work is included.
 
 ## Build on Linux / Replit
 
@@ -35,13 +33,18 @@ make test-organize-alloc # allocation and file-I/O failure injection
 make test-report # metadata keyword-matching tests
 make test-report-csv # exact CSV encoding and filesystem tests
 make test-report-alloc # injected allocation, write, close and cleanup failures
+make test-pipeline # pipeline API and validation tests
+make test-pipeline-integration # C-only local end-to-end and CLI tests
+make test-pipeline-alloc # deterministic pipeline allocation-failure tests
 make test        # includes local fixtures and original network-dependent tests
 ```
 
 Linux executables include `build/crawler-demo`, `build/demo_pipeline`,
-`build/crawler-bfs`, `build/discover-documents` and `build/download-document`.
+`build/crawler-bfs`, `build/discover-documents`, `build/download-document` and
+`build/deepdownload`.
 For beginner explanations, see [`documentation/phase4.md`](documentation/phase4.md),
-[`documentation/phase10.md`](documentation/phase10.md), and
+[`documentation/phase10.md`](documentation/phase10.md),
+[`documentation/phase12.md`](documentation/phase12.md), and
 [`documentation/api.md`](documentation/api.md).
 
 ## Build on Windows
@@ -54,16 +57,23 @@ make test
 ```
 
 The Makefile builds `build/libcrawler.a`, the existing crawler demos,
-`build/discover-documents.exe`, `build/download-document.exe` and test programs.
+`build/discover-documents.exe`, `build/download-document.exe`,
+`build/deepdownload.exe` and test programs.
 Native Windows execution is not verified here; POSIX loopback integration and
 fault-injection targets print SKIP on native Windows.
 
-Run the combined pipeline with the default URL or supply one:
+The older presentation demo still calls individual APIs in sequence; the actual
+Phase 12 integration CLI is `deepdownload`:
 
 ```powershell
-.\build\demo_pipeline.exe
-.\build\demo_pipeline.exe https://example.com
+.\build\deepdownload.exe START_URL OUTPUT_ROOT REPORT.csv [DEPTH] [SAME_DOMAIN] [--keyword WORD]...
 ```
+
+`OUTPUT_ROOT` must already exist. Depth defaults to 1 (the CLI accepts 0–3),
+same-domain defaults to 1, and the request timeout is a fixed 3 seconds. Use
+only a site you own or have permission to access. Exit code 0 means the bounded
+run completed; 1 means partial results or a safety limit; 2 means invalid input
+or a fatal error.
 
 ## Part 1: public crawler API
 
@@ -84,10 +94,12 @@ NOT_IMPLEMENTED remains a legacy enum value, not the valid-run behavior.
 The presentation pipeline demo calls its standalone URL/downloader functions
 separately; `crawler_run` itself already performs bounded BFS.
 
-## Remaining work
+## Current status
 
-Final end-to-end integration (Phase 12) remains future work. See
-`documentation/progress.md` and `documentation/architecture.md`.
+The Phase 12 bounded pipeline is implemented and integrated. It does not claim
+to exhaustively crawl a site. See [`documentation/progress.md`](documentation/progress.md)
+and [`documentation/architecture.md`](documentation/architecture.md) for the
+current boundaries and test coverage.
 
 ## Phase 4: HTML hyperlink extraction
 
@@ -136,8 +148,8 @@ allocation and error behavior as of Phase 5. Current integration and failure
 contracts are in the Phase 6 documents linked below.
 
 The Markdown-only [prompt history](prompt%20history/2026-11-07-project-history.md)
-contains accessible historical requests and the complete Phase 5–9 orders and
-evidence handoffs. No AI, GUI, browser automation or parallel crawling is
+and dated Phase 5–12 instructions/hand-offs record the project decisions and
+acceptance evidence. No AI, GUI, browser automation or parallel crawling is
 implemented.
 
 ## Phase 6: actual bounded BFS, controlled demonstration
@@ -215,9 +227,9 @@ and [current validation/handoff](prompt%20history/2026-11-09-phase7-acceptance-a
 Earlier Phase 6 history records describe the old post-fetch policy and are
 intentionally preserved, not silently rewritten.
 
-Phase 10 has now added standalone hashing and organization for one completed
-local file. Phase 11 below adds metadata filtering and CSV reporting. Phase 12
-remains pending and is a separate acceptance-gated integration phase.
+Phase 10 provides standalone hashing and organization for one completed local
+file. Phase 11 adds reusable metadata filtering and CSV reporting. Phase 12
+connects these modules through the bounded pipeline described below.
 No mode/configuration change, paid upgrade or deployment was made.
 
 ## Phase 8: public-document link discovery and provenance
@@ -313,9 +325,8 @@ POSIX filesystem facilities and explicitly skip on native Windows. See
 ownership, failure behavior and scope. The full Phase 10 instruction and
 evidence-based handoff are in `prompt history/`.
 
-Phase 10 is not a bulk pipeline: it takes one completed local file. Phase 11
-does not integrate crawling and downloading; Phase 12 will provide the bounded
-end-to-end workflow only after Phase 11.
+Phase 10 remains a reusable one-file operation. Phase 11 remains a reusable
+metadata/reporting module. Phase 12 connects them through a bounded workflow.
 
 ## Phase 11: metadata keyword filtering and CSV
 
@@ -339,7 +350,7 @@ header only.
 `output_path` only after success or when cleanup of a failed new file itself
 fails; release it with `report_result_free`. Failed and skipped rows cannot
 claim a stored hash or path. `report_row_matches` inspects only the two
-metadata URLs, so Phase 12 can filter before download outcomes exist.
+metadata URLs, so the Phase 12 pipeline filters before download outcomes exist.
 
 ```sh
 make test-report
@@ -348,6 +359,40 @@ make test-report-alloc
 ```
 
 The metadata unit suite is portable C. CSV filesystem and fault-injection tests
-use POSIX temporary directories and explicitly skip on native Windows. See
-[`documentation/phase11.md`](documentation/phase11.md) and the Phase 11 prompt
-history handoff for exact test counts, ownership and limitations.
+use POSIX temporary directories and explicitly skip on native Windows. Phase 12
+composes these modules but never inspects document contents. See
+[`documentation/phase11.md`](documentation/phase11.md),
+[`documentation/phase12.md`](documentation/phase12.md), and the prompt-history
+handoffs for test counts, ownership and limitations.
+
+## Phase 12: bounded end-to-end pipeline
+
+`include/pipeline.h` and `src/pipeline.c` connect document discovery, metadata
+keyword filtering, the existing one-document downloader, SHA-256
+organization/deduplication, and the safe provenance CSV writer. The CLI is
+`build/deepdownload`:
+
+```sh
+mkdir -p output
+./build/deepdownload START_URL output report.csv [DEPTH 0..3] [SAME_DOMAIN 0|1] [--keyword WORD]...
+make test-pipeline
+make test-pipeline-integration
+make test-pipeline-alloc
+```
+
+The output directory must already exist. Discovery order is preserved;
+keyword matching uses document/source URL metadata; at most ten selected unique
+documents are downloaded; and the CSV retains a row for every selected
+source/document relationship. Identical bytes are reported as duplicates, not
+stored twice. Failures and resource ceilings produce explicit partial/limited
+statuses, never a claim of exhaustive success. `PipelineConfig` strings and
+keywords are borrowed for the call. `PipelineResult` owns its report path and
+any paths left behind when cleanup itself fails; release them with
+`pipeline_result_free`.
+
+The deterministic integration target starts a C-only loopback server and runs
+the actual CLI. It checks BFS order/depth, filters, redirected relative-link
+provenance, duplicate content, failed pages/downloads, limits, report safety,
+timeouts and cleanup. Native Windows execution is not verified; POSIX fixture
+tests explicitly skip there. See [`documentation/phase12.md`](documentation/phase12.md)
+for the beginner-oriented API, memory, resource-limit and test explanations.

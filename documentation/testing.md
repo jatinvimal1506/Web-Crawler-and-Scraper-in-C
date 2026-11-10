@@ -26,9 +26,13 @@ make test-organize-alloc
 make test-report
 make test-report-csv
 make test-report-alloc
+make test-pipeline
+make test-pipeline-integration
+make test-pipeline-alloc
 ```
 
-`make` also builds the retained pipeline demo and the real `crawler-bfs` CLI.
+`make` also builds the retained presentation demo, the real `crawler-bfs` CLI,
+and the Phase 12 `deepdownload` CLI.
 The basic API test checks invalid arguments, statistics initialization/statuses
 and CRAWLER_OK on a controlled empty HTML page from a C stub (NOT the former
 NOT_IMPLEMENTED result). The URL suite retains parsing/normalization/resolution,
@@ -38,8 +42,9 @@ the current demo, not an unpermissioned public-site crawl.
 `make test` includes the original API/URL tests, standalone HTML tests, local
 HTTP fixtures, Phase 5 tests, HTTP metadata allocation-failure tests, Phase 8
 discovery, Phase 9 download tests, Phase 10 hash/organization tests, Phase 11
-report tests, plus original live HTTP tests. The live suite may skip probes or fail when public network access is
-blocked. Local fixtures use only a C server bound to loopback on a free port.
+report tests, Phase 12 pipeline tests, plus original live HTTP tests. The live
+suite may skip probes or fail when public network access is blocked. Local
+fixtures use only C servers bound to loopback on a free port.
 
 Phase 8's `test-document` covers URL-path extension parsing, case, query/
 fragment handling, invalid inputs and result accessor/cleanup behavior.
@@ -301,3 +306,79 @@ explicitly print `SKIP` on native Windows. The unit matcher is portable C11.
 Native Windows execution remains NOT VERIFIED. Actual Phase 11 counts and full
 regression results are in
 `../prompt history/2026-11-09-phase11-design-and-handoff.md`.
+
+## Phase 12 end-to-end pipeline tests
+
+`make test-pipeline` is a deterministic C API/validation suite for result
+initialization/cleanup, status mapping and invalid configuration. It does not
+use public websites.
+
+`make test-pipeline-integration` starts the shared C-only POSIX loopback fixture
+and runs the real `deepdownload` executable as a child process. Its assertions
+cover:
+
+- Full root/courses/research discovery, duplicate URL and source relationships,
+  depth 0/1/2, exact FIFO request order, and the depth-two document source row.
+- Keyword selection from both a document URL and a source-page URL, no matches,
+  header-only reports, and filtering before downloads.
+- A failed HTML child while preserving the root's document discovery and
+  writing a partial report.
+- Redirected HTML with relative href resolution from its effective URL and a
+  binary-file relative redirect.
+- Same-host/port restrictions, no request to blocked redirect destinations,
+  permitted cross-host/same-port behavior when configured, and duplicate bytes.
+- Existing canonical content preservation, temporary staging-name collision
+  safety, pre-existing report rejection before network access, and an empty
+  staging directory after normal completion.
+- The ten-unique-document attempt limit, 404/500/wrong-MIME/empty/missing-MIME/
+  interrupted responses, short timeout, and CSV status/stat consistency.
+- Real unfiltered and keyword-filtered CLI runs against the local fixture,
+  including actual exit codes, counters, output tree, file sizes, SHA-256
+  values and CSV header/representative rows.
+- Invalid CLI depth and a missing output root both stop before network access.
+
+`make test-pipeline-alloc` compiles a separate test-only version of
+`src/pipeline.c` with a failing allocator and test-only replacements for
+`remove` and `report_write_csv`. It injects failure at every observed allocation
+in a one-document run, checks cleanup and repeated result freeing, and verifies
+that a staging-directory collision makes zero requests. The tests force a
+staging cleanup failure and check the returned orphan path, and simulate CSV
+write/close errors to verify pipeline status propagation; each failure is
+followed by a successful retry with a different report filename. Actual report
+file-write and close failures are also covered by `make test-report-alloc`.
+These replacements are not included in `libcrawler.a`.
+
+All three targets are included in `make test`. The integration and allocation
+fixtures use POSIX sockets, `fork`, and temporary filesystem functions and
+explicitly print `SKIP` on native Windows. `make` retains its Windows/MSYS2
+branches, but a Linux run is not evidence of Windows runtime success. Current
+counts, literal command exit statuses, compiler warnings, sanitizer results
+and remaining limitations are recorded in
+`../prompt history/2026-11-09-phase12-design-and-handoff.md`.
+
+### Phase 12 Linux verification
+
+On the Linux Replit/Nix environment with GCC and libcurl 8.14.1, the final
+commands `make clean`, `make`, and `make test` each exited 0. The complete
+suite reported no skips or assertion failures; its existing live HTTPS
+downloader checks passed 7/7. A separate strict run,
+`CFLAGS="$CFLAGS -Werror" make test`, also exited 0 with no compiler warnings.
+
+The Phase 12 targets reported 50 unit checks, 268 local end-to-end checks, and
+116 allocation/cleanup checks across seven allocation failure positions. The
+optional `make test-html-alloc` target passed all 143 HTML allocation failure
+positions. The local CLI fixture prints actual unfiltered and keyword-filtered
+runs, output files and hashes, CSV header/rows, and an invalid-depth run that
+returned exit 2 with zero fixture requests.
+
+Targeted AddressSanitizer/UndefinedBehaviorSanitizer runs of the three Phase 12
+targets passed with `ASAN_OPTIONS=detect_leaks=0` and no ASan/UBSan diagnostics.
+Leak-enabled execution was attempted separately but exited 2 because
+LeakSanitizer reported that it does not work under ptrace in this environment;
+therefore a leak-enabled sanitizer result is NOT VERIFIED. The C allocation
+accounting tests did pass, but are not a process-wide leak proof.
+
+This is Linux-only evidence. Native Windows/MSYS2 execution was not available
+and remains NOT VERIFIED. The POSIX local fixture targets explicitly skip on
+native Windows; the Makefile's Windows branches and setup instructions are
+maintained but are not claimed as runtime-tested.
