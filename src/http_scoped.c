@@ -1,6 +1,7 @@
 /* Phase 7: bounded manual redirects using the SAME checked HTTP transport.
  * URL scope is checked before each transfer, never by a string prefix. */
 #include "http_internal.h"
+#include "http.h"
 #include "url.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,9 +27,6 @@ static int redirect_status(long status)
     return status == 301 || status == 302 || status == 303 ||
            status == 307 || status == 308;
 }
-
-/* On OOM, no partial response escapes. Other errors retain metadata from
- * the last ACTUALLY fetched hop, not the blocked/unrequested destination. */
 HttpStatus http_download_scoped(const char *url, long timeout_seconds,
                                const char *seed_url, int same_domain,
                                HttpResponse *response)

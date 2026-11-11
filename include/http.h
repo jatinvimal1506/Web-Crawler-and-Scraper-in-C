@@ -1,13 +1,6 @@
 #ifndef HTTP_H
 #define HTTP_H
 
-/*
- * Part 3: HTTP downloader.
- *
- * Give it one URL, get back either the page's HTML or a clear reason why
- * the page could not be fetched. It never exits the program and never
- * crashes on bad input or a bad network.
- */
 
 #include <stddef.h>
 #include "project.h"     /* CrawlerStatus, so we can report in project terms */

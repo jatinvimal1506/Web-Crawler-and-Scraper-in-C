@@ -28,6 +28,9 @@
 #define DD_FDOPEN _fdopen
 #define DD_BINARY_FLAG _O_BINARY
 #define DD_PATH_SEPARATOR '\\'
+typedef struct _stat DownloadStat;
+#define DOWNLOAD_STAT _stat
+#define DOWNLOAD_IS_DIRECTORY(mode) (((mode) & _S_IFMT) == _S_IFDIR)
 #else
 #include <fcntl.h>
 #include <unistd.h>
@@ -36,6 +39,9 @@
 #define DD_FDOPEN fdopen
 #define DD_BINARY_FLAG 0
 #define DD_PATH_SEPARATOR '/'
+typedef struct stat DownloadStat;
+#define DOWNLOAD_STAT stat
+#define DOWNLOAD_IS_DIRECTORY(mode) S_ISDIR(mode)
 #endif
 
 #define DOWNLOAD_MAX_REDIRECTS 5U
@@ -505,12 +511,8 @@ static int basename_is_safe(const char *name, DocumentType type)
 
 static int directory_is_existing(const char *path)
 {
-    struct stat info;
-#ifdef _WIN32
-    return _stat(path, &info) == 0 && (info.st_mode & _S_IFDIR) != 0;
-#else
-    return stat(path, &info) == 0 && S_ISDIR(info.st_mode);
-#endif
+    DownloadStat info;
+    return DOWNLOAD_STAT(path, &info) == 0 && DOWNLOAD_IS_DIRECTORY(info.st_mode);
 }
 
 static DownloadStatus make_output_path(const char *directory,

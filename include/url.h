@@ -23,23 +23,14 @@ typedef struct {
     char *fragment;
 } ParsedUrl;
 
-/*
- * Parse an absolute HTTP(S) URL. Initialize result as {0} before its first
- * use. On success it owns allocated components; free them with url_free().
- * A non-empty result is rejected so existing pointers are never overwritten.
- */
-UrlStatus url_parse(const char *input, ParsedUrl *result);
+//Parse an absolute HTTP(S) URL. Initialize result as {0} before its first use. On success it owns allocated components; free them with url_free(). A non-empty result is rejected so existing pointers are never overwritten.
 
-/* Safe for NULL; frees all parsed component strings and clears the structure. */
+UrlStatus url_parse(const char *input, ParsedUrl *result);// breaks URL into components such as scheme,hostname,port,path and query.
+
 void url_free(ParsedUrl *url);
-
-/*
- * Normalize a supported absolute URL or resolve a URL reference. On success
- * *output is heap allocated and belongs to the caller (free it). On failure,
- * *output is NULL whenever output itself is non-NULL.
- */
 UrlStatus url_normalize(const char *input, char **output);
-UrlStatus url_resolve(const char *base, const char *relative, char **output);
+// URL normalize converts equivalent URL spellings into a consitent form, helping us recognize duplicate addresses.
+UrlStatus url_resolve(const char *base, const char *relative, char **output);//creates realtive links into absolute URLs.
 
 /* Return a static status description; do not modify or free it. */
 const char *url_status_message(UrlStatus status);
