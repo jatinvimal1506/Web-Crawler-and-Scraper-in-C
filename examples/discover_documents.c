@@ -13,7 +13,7 @@ static int parse_depth(const char *text, size_t *depth)
         digit = (unsigned)(text[i] - '0');
         if (value > (10U - digit) / 10U) { return 0; }
         value = value * 10U + digit;
-        if (value > 10) { return 0; } /* Conservative teaching/demo depth. */
+        if (value > 10) { return 0; }
     }
     *depth = value;
     return 1;

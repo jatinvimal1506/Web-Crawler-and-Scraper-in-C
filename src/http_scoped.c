@@ -1,5 +1,5 @@
-/* Phase 7: bounded manual redirects using the SAME checked HTTP transport.
- * URL scope is checked before each transfer, never by a string prefix. */
+
+
 #include "http_internal.h"
 #include "http.h"
 #include "url.h"
@@ -101,7 +101,7 @@ HttpStatus http_download_scoped(const char *url, long timeout_seconds,
         free(location);
         location = NULL;
         ++redirects;
-        /* Keep last-hop metadata until the new target passes validation. */
+
     }
 done:
     free(current);

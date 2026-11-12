@@ -175,10 +175,10 @@ static int contains_ascii_case_insensitive(const char *text, size_t text_length,
         return 0;
     }
 
-    /*
-     * KMP's small prefix table avoids rescanning long near-matches. With the
-     * public 64-byte keyword bound this uses only a fixed 512-byte stack array.
-     */
+
+
+
+
     prefix[0] = 0U;
     for (index = 1U; index < keyword_length; ++index) {
         while (matched > 0U &&
@@ -257,7 +257,7 @@ static void set_result_status(ReportResult *result, ReportStatus status,
 ReportStatus report_result_init(ReportResult *result)
 {
     if (result == NULL) { return REPORT_ERROR_INVALID_ARGUMENT; }
-    /* This initializes fresh storage; free any owned path before reusing it. */
+
     *result = (ReportResult){0};
     return REPORT_OK;
 }
@@ -343,7 +343,7 @@ static int valid_csv_basename(const char *filename)
             return 0;
         }
     }
-    /* Windows device names remain reserved even when an extension is present. */
+
     {
         size_t stem_length = 0;
         while (stem_length < length && filename[stem_length] != '.') {

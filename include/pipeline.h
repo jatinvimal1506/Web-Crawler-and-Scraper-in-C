@@ -24,14 +24,14 @@ typedef enum {
 } PipelineStatus;
 
 typedef struct {
-    const char *start_url;             /* Borrowed absolute HTTP(S) seed. */
-    const char *output_root;           /* Borrowed existing trusted directory. */
-    const char *report_filename;       /* Borrowed safe .csv basename. */
+    const char *start_url;
+    const char *output_root;
+    const char *report_filename;
     size_t max_depth;
     int same_domain;
-    long timeout_seconds;              /* 1..3600 per HTTP request. */
-    const char *const *keywords;       /* Borrowed; each keyword remains valid. */
-    size_t keyword_count;              /* 0..8; zero selects all metadata. */
+    long timeout_seconds;
+    const char *const *keywords;
+    size_t keyword_count;
 } PipelineConfig;
 
 typedef struct {
@@ -54,26 +54,19 @@ typedef struct {
 typedef struct {
     PipelineStatus status;
     PipelineStats stats;
-    char *report_path;       /* Owned when a report exists, including cleanup failure. */
-    char *orphaned_paths[2]; /* Owned paths that could not be cleaned; see count. */
+    char *report_path;
+    char *orphaned_paths[2];
     size_t orphaned_path_count;
     char detail[256];
 } PipelineResult;
 
-/* Initialize fresh or already-freed result storage; no allocation is done. */
-PipelineStatus pipeline_result_init(PipelineResult *result);
-/* NULL-safe/repeatable; frees owned report and orphaned paths. */
-void pipeline_result_free(PipelineResult *result);
-/* Static message; the caller must not free it. */
-const char *pipeline_status_message(PipelineStatus status);
 
-/*
- * Run bounded document discovery, metadata filtering, up to ten unique
- * downloads, content organization/deduplication, and a provenance CSV.
- * Config strings and keyword data are borrowed for this call. Initialize
- * result with pipeline_result_init() or {0}; free owned paths with
- * pipeline_result_free(). No other heap memory escapes.
- */
+PipelineStatus pipeline_result_init(PipelineResult *result);
+
+void pipeline_result_free(PipelineResult *result);
+// releases the memory owned by the result structure.
+
+const char *pipeline_status_message(PipelineStatus status);
 PipelineStatus pipeline_run(const PipelineConfig *config,
                             PipelineResult *result);
 

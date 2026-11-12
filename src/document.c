@@ -133,7 +133,7 @@ static DocumentStatus reserve_sources(DocumentRecord *record)
     return DOCUMENT_OK;
 }
 
-/* The returned canonical strings are owned here until appended to results. */
+
 static DocumentStatus add_occurrence(DocumentResults *results,
                                      const char *document_url,
                                      const char *source_url,
@@ -169,7 +169,7 @@ static DocumentStatus add_occurrence(DocumentResults *results,
             if (strcmp(record->sources[j].page_url, source_key) == 0) {
                 free(document_key);
                 free(source_key);
-                return DOCUMENT_OK; /* Same normalized pair: no duplicate. */
+                return DOCUMENT_OK;
             }
         }
     }
@@ -192,8 +192,8 @@ static DocumentStatus add_occurrence(DocumentResults *results,
         return DOCUMENT_OK;
     }
 
-    /* Prepare the source array and canonical strings before publishing a new
-     * record. A failure cannot leave a half-created document visible. */
+
+
     new_sources = malloc(2 * sizeof(*new_sources));
     if (new_sources == NULL) {
         free(document_key);
@@ -250,13 +250,13 @@ static CrawlerStatus observe_link(const char *source_page_url,
         return CRAWLER_OUT_OF_MEMORY;
     }
     if (status != DOCUMENT_OK) {
-        /* The crawler supplies validated absolute links, so this indicates a
-         * broken callback contract rather than an unsupported file type. */
+
+
         context->failure = DOCUMENT_ERROR_INVALID_URL;
         return CRAWLER_INTERNAL_ERROR;
     }
     if (type == DOCUMENT_TYPE_UNKNOWN) { return CRAWLER_OK; }
-    *crawl_link = 0; /* Recognized document URLs must never enter the BFS. */
+    *crawl_link = 0;
     status = add_occurrence(context->results, link_url, source_page_url,
                             source_depth, type);
     if (status == DOCUMENT_OK) { return CRAWLER_OK; }
@@ -285,7 +285,7 @@ DocumentStatus document_discover(const CrawlerConfig *config,
     crawl_status = crawler_run_with_link_observer(config, stats,
                                                    observe_link, &context);
     if (crawl_status == CRAWLER_OUT_OF_MEMORY) {
-        document_results_free(results); /* Fatal run: all-or-empty rollback. */
+        document_results_free(results);
         return DOCUMENT_ERROR_OUT_OF_MEMORY;
     }
     if (context.failure == DOCUMENT_ERROR_OVERFLOW ||

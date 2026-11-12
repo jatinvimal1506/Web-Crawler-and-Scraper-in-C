@@ -48,7 +48,7 @@ QueueStatus queue_enqueue(UrlQueue *queue, const char *url, int depth)
     }
     length = strlen(url);
     if (length == SIZE_MAX) {
-        return QUEUE_ERROR_OVERFLOW; /* Protect length + 1 before malloc. */
+        return QUEUE_ERROR_OVERFLOW;
     }
     node = malloc(sizeof(*node));
     if (node == NULL) {
@@ -62,7 +62,7 @@ QueueStatus queue_enqueue(UrlQueue *queue, const char *url, int depth)
     memcpy(node->item.url, url, length + 1);
     node->item.depth = depth;
     node->next = NULL;
-    /* Publish only after BOTH allocations succeed: failure is transactional. */
+
     if (queue->tail != NULL) {
         queue->tail->next = node;
     } else {
@@ -83,13 +83,13 @@ QueueStatus queue_dequeue(UrlQueue *queue, UrlQueueItem *item)
         return QUEUE_EMPTY;
     }
     node = queue->head;
-    *item = node->item; /* Ownership moves, not the bytes of the string. */
+    *item = node->item;
     queue->head = node->next;
     if (queue->head == NULL) {
         queue->tail = NULL;
     }
     --queue->count;
-    free(node); /* Its URL now belongs to the caller, so do NOT free it here. */
+    free(node);
     return QUEUE_OK;
 }
 
@@ -106,7 +106,7 @@ void queue_free(UrlQueue *queue)
     if (queue != NULL) {
         QueueNode *node = queue->head;
         while (node != NULL) {
-            QueueNode *next = node->next; /* Save before freeing this node. */
+            QueueNode *next = node->next;
             queue_item_free(&node->item);
             free(node);
             node = next;

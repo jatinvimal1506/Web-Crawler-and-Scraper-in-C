@@ -128,7 +128,7 @@ static PathKind inspect_path(const char *path, OrgStat *info)
     }
     if (ORG_IS_REGULAR(info->st_mode)) { return PATH_REGULAR; }
     if (ORG_IS_DIRECTORY(info->st_mode)) { return PATH_DIRECTORY; }
-    return PATH_OTHER; /* Includes POSIX symlinks. */
+    return PATH_OTHER;
 }
 
 static int path_has_separator(const char *path, size_t length)
@@ -499,7 +499,7 @@ OrganizerStatus organize_file(const char *completed_file_path,
         return ORGANIZER_DUPLICATE;
     }
 
-    /* Create the destination exclusively, then copy and verify it. */
+
     {
         int descriptor;
         FILE *destination;

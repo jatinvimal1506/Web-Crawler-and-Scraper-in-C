@@ -64,7 +64,7 @@ void pipeline_test_free(void *pointer)
             return;
         }
     }
-    /* PipelineResult can own strings created by the other library modules. */
+
     free(pointer);
 }
 

@@ -7,17 +7,17 @@
 extern "C" {
 #endif
 
-/* Status returned by the public crawler API. */
+
 typedef enum {
     CRAWLER_OK = 0,
     CRAWLER_INVALID_ARGUMENT,
     CRAWLER_OUT_OF_MEMORY,
     CRAWLER_NETWORK_ERROR,
     CRAWLER_PARSE_ERROR,
-    CRAWLER_NOT_IMPLEMENTED, /* Retained for source/numeric compatibility. */
-    CRAWLER_PARTIAL,        /* Queue drained, but one or more pages failed. */
-    CRAWLER_LIMIT_REACHED,  /* Deliberate budget/depth ceiling; incomplete. */
-    CRAWLER_INTERNAL_ERROR  /* Container/invariant contract failure. */
+    CRAWLER_NOT_IMPLEMENTED,
+    CRAWLER_PARTIAL,
+    CRAWLER_LIMIT_REACHED,
+    CRAWLER_INTERNAL_ERROR
 } CrawlerStatus;
 
 typedef CrawlerStatus (*CrawlerLinkObserver)(
@@ -35,11 +35,11 @@ typedef struct {
 } CrawlerConfig;
 
 typedef struct {
-    size_t pages_visited;     /* HTTP_OK + complete successful extraction. */
-    size_t pages_failed;      /* Attempted downloads/parses/scope checks failed. */
-    size_t links_discovered;  /* Entries from complete extracted pages; duplicates included. */
-    size_t max_depth_reached; /* Maximum depth actually attempted. */
-    size_t bytes_downloaded;  /* HTTP_OK body bytes, even if later parsing fails. */
+    size_t pages_visited;
+    size_t pages_failed;
+    size_t links_discovered;
+    size_t max_depth_reached;
+    size_t bytes_downloaded;
 } CrawlerStats;
 CrawlerStatus crawler_run(const CrawlerConfig *config, CrawlerStats *stats);
 CrawlerStatus crawler_run_with_link_observer(

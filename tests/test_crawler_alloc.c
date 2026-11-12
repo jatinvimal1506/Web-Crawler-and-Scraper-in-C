@@ -91,7 +91,7 @@ QueueStatus crawler_test_dequeue(UrlQueue *queue, UrlQueueItem *item)
     }
     status = queue_dequeue(queue, item);
     if (status == QUEUE_OK && force_depth) {
-        item->depth = forced_depth; /* Test-only synthetic unreachable boundary. */
+        item->depth = forced_depth;
     }
     return status;
 }

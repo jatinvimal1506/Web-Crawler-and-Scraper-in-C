@@ -1,11 +1,3 @@
-/*
- * Part 3: HTTP Downloader Implementation
- *
- * Implements single-page downloading over HTTP/HTTPS using libcurl.
- * Handles timeouts, redirects (up to 5 hops), size limits (5 MB max),
- * Content-Type verification for HTML, and structured error reporting.
- */
-
 #include "http.h"
 #include "url.h"
 #include "http_internal.h"
@@ -17,13 +9,8 @@
 #include <string.h>
 #include <stdint.h>
 
-/* Track whether libcurl global initialization has been performed. */
 static int s_curl_initialized = 0;
 
-/*
- * Allocate a new copy of a string.
- * Uses standard C11 functions to ensure strict portability.
- */
 static char *copy_string(const char *src)
 {
     if (src == NULL) {
@@ -39,9 +26,6 @@ static char *copy_string(const char *src)
     return dst;
 }
 
-/*
- * Internal dynamic buffer for collecting the downloaded response body.
- */
 typedef struct {
     char   *data;
     size_t  size;
@@ -50,9 +34,6 @@ typedef struct {
     int     oom;
 } BodyBuffer;
 
-/*
- * libcurl write callback invoked as chunks of the response body arrive.
- */
 static size_t http_write_callback(void *contents, size_t size, size_t nmemb, void *userp)
 {
     BodyBuffer *buf = (BodyBuffer *)userp;
@@ -63,10 +44,9 @@ static size_t http_write_callback(void *contents, size_t size, size_t nmemb, voi
     }
     bytes = size * nmemb;
 
-    /* Enforce project body size limit (5 MB) */
     if (bytes > HTTP_MAX_BODY_BYTES - buf->size) {
         buf->too_large = 1;
-        return 0; /* Aborting returns CURLE_WRITE_ERROR */
+        return 0;
     }
 
     size_t needed = buf->size + bytes + 1;
@@ -78,7 +58,7 @@ static size_t http_write_callback(void *contents, size_t size, size_t nmemb, voi
         char *new_data = (char *)realloc(buf->data, new_cap);
         if (new_data == NULL) {
             buf->oom = 1;
-            return 0; /* Out of memory abort */
+            return 0;
         }
         buf->data = new_data;
         buf->capacity = new_cap;
@@ -91,8 +71,8 @@ static size_t http_write_callback(void *contents, size_t size, size_t nmemb, voi
     return bytes;
 }
 
-/* Fixed bounded header storage avoids reallocating in the header callback.
- * Reset on status lines (e.g. proxy CONNECT or interim 100 response). */
+
+
 typedef struct {
     char text[2049];
     int seen;
@@ -121,7 +101,7 @@ static size_t location_header(char *data, size_t size, size_t count, void *user)
     if (header->seen || end == start || end - start >= sizeof(header->text) ||
         memchr(data + start, '\0', end - start) != NULL) {
         header->invalid = 1;
-        return 0; /* Fail closed on ambiguous/oversized Location. */
+        return 0;
     }
     memcpy(header->text, data + start, end - start);
     header->text[end - start] = '\0';
@@ -129,8 +109,8 @@ static size_t location_header(char *data, size_t size, size_t count, void *user)
     return bytes;
 }
 
-/* Test builds can force an option result without unsafe variadic forwarding.
- * No hook reference or code is compiled into the release object. */
+
+
 #ifdef HTTP_OPTION_TEST
 extern CURLcode http_test_option_result(CURLoption option);
 #define OPTION_RESULT(option) http_test_option_result(option)
@@ -148,10 +128,10 @@ extern CURLcode http_test_option_result(CURLoption option);
     } \
 } while (0)
 
-/*
- * Compare the entire media-type token, not a substring or a parameter value.
- * HTTP optional whitespace is space/tab; parameters follow the first ';'.
- */
+
+
+
+
 static int is_html_content_type(const char *ct)
 {
     if (ct == NULL) {
@@ -191,10 +171,10 @@ static int is_html_content_type(const char *ct)
     return 0;
 }
 
-/*
- * Fallback check when the server omits Content-Type header:
- * inspects the first non-whitespace characters for HTML doctype or tag.
- */
+
+
+
+
 static int is_body_html_heuristic(const char *body, size_t size)
 {
     if (body == NULL || size == 0) {
@@ -230,9 +210,6 @@ static int is_body_html_heuristic(const char *body, size_t size)
     return 0;
 }
 
-/*
- * Ensure libcurl's global state is initialized.
- */
 static CURLcode ensure_curl_initialized(void)
 {
     if (!s_curl_initialized) {
@@ -250,9 +227,6 @@ HttpStatus http_prepare_curl(void)
     return result == CURLE_OUT_OF_MEMORY ? HTTP_ERR_OUT_OF_MEMORY : HTTP_ERR_INIT;
 }
 
-/*
- * Release libcurl global resources at program exit.
- */
 void http_cleanup(void)
 {
     if (s_curl_initialized) {
@@ -261,9 +235,6 @@ void http_cleanup(void)
     }
 }
 
-/*
- * Release every allocated component of an HttpResponse.
- */
 void http_response_free(HttpResponse *response)
 {
     if (response == NULL) {
@@ -282,9 +253,6 @@ void http_response_free(HttpResponse *response)
     response->detail[0] = '\0';
 }
 
-/*
- * Map HttpStatus to a static human-readable description.
- */
 const char *http_status_string(HttpStatus status)
 {
     switch (status) {
@@ -323,9 +291,6 @@ const char *http_status_string(HttpStatus status)
     }
 }
 
-/*
- * Translate an HttpStatus into the crawler's unified CrawlerStatus.
- */
 CrawlerStatus http_to_crawler_status(HttpStatus status)
 {
     switch (status) {
@@ -353,18 +318,13 @@ CrawlerStatus http_to_crawler_status(HttpStatus status)
     }
 }
 
-/*
- * Download one page using libcurl.
- */
 static HttpStatus download_request(const char *url, long timeout_seconds,
                                   HttpResponse *response, char **location)
 {
-    /* STEP 1: Validate argument pointers and bounds. */
     if (response == NULL) {
         return HTTP_ERR_INVALID_ARGUMENT;
     }
 
-    /* Initialize response to a zeroed state. */
     *response = (HttpResponse){0};
     if (location != NULL) { *location = NULL; }
 
@@ -377,7 +337,6 @@ static HttpStatus download_request(const char *url, long timeout_seconds,
         return HTTP_ERR_INVALID_ARGUMENT;
     }
 
-    /* STEP 2: Validate the URL using Part 2's url_parse(). */
     ParsedUrl parsed = {0};
     UrlStatus url_status = url_parse(url, &parsed);
     if (url_status != URL_OK) {
@@ -389,7 +348,6 @@ static HttpStatus download_request(const char *url, long timeout_seconds,
     }
     url_free(&parsed);
 
-    /* STEP 3: Initialize libcurl global and easy session. */
     CURLcode initialized = ensure_curl_initialized();
     if (initialized != CURLE_OK) {
         snprintf(response->detail, sizeof(response->detail),
@@ -404,14 +362,13 @@ static HttpStatus download_request(const char *url, long timeout_seconds,
         return HTTP_ERR_OUT_OF_MEMORY;
     }
 
-    /* STEP 4: Configure download options. */
     char errbuf[CURL_ERROR_SIZE] = {0};
     BodyBuffer buf = {0};
     LocationHeader header = {0};
 
-    /* Restrict BOTH the initial request and every redirect. Fail closed if
-     * libcurl cannot apply the policy. Keep default TLS verification enabled.
-     * String options arrived in 7.85.0; retain older MSYS2 curl compatibility. */
+        // Restrict BOTH the initial request and every redirect. Fail closed if
+    // libcurl cannot apply the policy. Keep default TLS verification enabled.
+    // String options arrived in 7.85.0; retain older MSYS2 curl compatibility.
 #if LIBCURL_VERSION_NUM >= 0x075500
     SET_OPTION(CURLOPT_PROTOCOLS_STR, "http,https");
     SET_OPTION(CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
@@ -437,7 +394,6 @@ static HttpStatus download_request(const char *url, long timeout_seconds,
         SET_OPTION(CURLOPT_HEADERDATA, &header);
     }
 
-    /* STEP 5: Perform the HTTP request. */
     CURLcode res = curl_easy_perform(curl);
     if (header.invalid) {
         free(buf.data);
@@ -446,7 +402,6 @@ static HttpStatus download_request(const char *url, long timeout_seconds,
         return HTTP_ERR_HTTP_STATUS;
     }
 
-    /* STEP 6: Capture metadata (final URL, HTTP status code, Content-Type). */
     char *effective_url = NULL;
     curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effective_url);
     if (effective_url != NULL) {
@@ -471,7 +426,6 @@ static HttpStatus download_request(const char *url, long timeout_seconds,
         if (*location == NULL) { goto metadata_oom; }
     }
 
-    /* STEP 7: Check transfer outcome and map errors. */
     if (res != CURLE_OK) {
         free(buf.data);
         buf.data = NULL;
@@ -543,7 +497,6 @@ static HttpStatus download_request(const char *url, long timeout_seconds,
         }
     }
 
-    /* STEP 8: Verify HTTP status code (must be 2xx). */
     if (response->status_code < 200 || response->status_code >= 300) {
         free(buf.data);
         response->body = NULL;
@@ -554,7 +507,6 @@ static HttpStatus download_request(const char *url, long timeout_seconds,
         return HTTP_ERR_HTTP_STATUS;
     }
 
-    /* STEP 9: Verify Content-Type is HTML. */
     int is_html = 0;
     if (ct != NULL) {
         is_html = is_html_content_type(ct);
@@ -572,7 +524,6 @@ static HttpStatus download_request(const char *url, long timeout_seconds,
         return HTTP_ERR_NOT_HTML;
     }
 
-    /* STEP 10: Deliver successful response. */
     if (buf.data == NULL) {
         buf.data = (char *)calloc(1, 1);
         if (buf.data == NULL) {
@@ -592,8 +543,6 @@ static HttpStatus download_request(const char *url, long timeout_seconds,
     return HTTP_OK;
 
 metadata_oom:
-    /* Nothing from a partially copied response is delivered as success.
-     * buf owns the body until STEP 10; response owns any copied metadata. */
     free(buf.data);
     if (location != NULL) { free(*location); *location = NULL; }
     http_response_free(response);

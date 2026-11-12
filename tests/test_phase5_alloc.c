@@ -3,7 +3,7 @@
 #include "phase5_check.h"
 #include <string.h>
 
-/* Only queue/visited/url test objects redirect malloc/free here. */
+
 static size_t allocations, fail_at, live;
 void *phase5_test_malloc(size_t size);
 void phase5_test_free(void *pointer);
@@ -16,7 +16,7 @@ void *phase5_test_malloc(size_t size)
         return NULL;
     }
     pointer = malloc(size);
-    CHECK(pointer != NULL); /* An unrelated real OOM must fail the test too. */
+    CHECK(pointer != NULL);
     ++live;
     return pointer;
 }
@@ -62,7 +62,7 @@ static size_t test_queue_failures(void)
     CHECK(queue_enqueue(&queue, "C", 2) == QUEUE_OK);
     points = allocations;
     drain_queue(&queue, 1);
-    CHECK(points == 2); /* Node and owned string. */
+    CHECK(points == 2);
     for (i = 1; i <= points; ++i) {
         size_t baseline;
         seed_queue(&queue);
@@ -72,13 +72,13 @@ static size_t test_queue_failures(void)
         CHECK(queue_enqueue(&queue, "C", 2) == QUEUE_ERROR_OUT_OF_MEMORY);
         CHECK(queue.count == 2 && live == baseline);
         fail_at = 0;
-        drain_queue(&queue, 0); /* Existing A/B and depths/order unchanged. */
-        /* A failure does not prevent a later successful enqueue. */
+        drain_queue(&queue, 0);
+
         CHECK(queue_enqueue(&queue, "retry", 2) == QUEUE_OK);
         queue_free(&queue);
         CHECK(live == 0);
     }
-    /* Free an undrained queue under accounting, not just drained outputs. */
+
     seed_queue(&queue);
     queue_free(&queue);
     queue_free(&queue);
@@ -127,7 +127,7 @@ static size_t test_visited_failures(VisitedStatus (*action)(VisitedSet *),
         fail_at = 0;
         CHECK(visited_contains(&set, "https://example.com/seed") == VISITED_PRESENT);
         CHECK(visited_contains(&set, "https://example.com/new?x=1") == VISITED_NOT_FOUND);
-        CHECK(action(&set) == expected); /* Successful retry on same object. */
+        CHECK(action(&set) == expected);
         visited_free(&set);
         visited_free(&set);
         CHECK(live == 0);

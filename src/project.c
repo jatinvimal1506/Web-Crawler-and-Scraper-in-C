@@ -27,8 +27,8 @@ const char *crawler_status_string(CrawlerStatus status)
 
 typedef struct {
     UrlQueue pending;
-    VisitedSet scheduled; /* Includes discovered keys and known redirect aliases. */
-    VisitedSet attempted; /* Skips queued direct URLs learned from redirects. */
+    VisitedSet scheduled;
+    VisitedSet attempted;
     ParsedUrl seed;
     const CrawlerConfig *config;
     CrawlerStats *stats;
@@ -37,7 +37,7 @@ typedef struct {
     size_t attempts;
 } Crawl;
 
-/* All counters are checked even though fixed budgets make overflow unlikely. */
+
 static int add_count(size_t *counter, size_t amount)
 {
     if (amount > SIZE_MAX - *counter) {
@@ -59,9 +59,9 @@ static unsigned effective_port(const ParsedUrl *url)
         : strcmp(url->scheme, "https") == 0 ? 443U : 80U;
 }
 
-/* Both modes pin effective port; strict mode also pins canonical hostname.
- * The scoped transport repeats this policy BEFORE each redirect request.
- * This final defense-in-depth check is not an IP/DNS/SSRF firewall. */
+// Both modes pin effective port; strict mode also pins canonical hostname.
+// The scoped transport repeats this policy BEFORE each redirect request.
+// This final defense-in-depth check is not an IP/DNS/SSRF firewall.
 static CrawlerStatus in_scope(const Crawl *crawl, const char *url, int *allowed)
 {
     ParsedUrl parts = {0};
@@ -104,8 +104,8 @@ static CrawlerStatus schedule(Crawl *crawl, const char *url, int depth)
             : CRAWLER_INTERNAL_ERROR;
     }
     inserted = visited_insert(&crawl->scheduled, url);
-    /* If insert failed AFTER enqueue, the caller aborts and frees BOTH
-     * containers. Never continue with this untracked queued item. */
+
+
     return inserted == VISITED_ADDED ? CRAWLER_OK : visited_error(inserted);
 }
 
@@ -123,8 +123,8 @@ static CrawlerStatus http_failure(HttpStatus status)
     return CRAWLER_NETWORK_ERROR;
 }
 
-/* One attempted page owns its response, extracted array and normalized final
- * key locally. A single cleanup block releases them on every path. */
+
+
 static CrawlerStatus process_page(Crawl *crawl, const UrlQueueItem *item)
 {
     HttpResponse response = {0};
@@ -137,7 +137,7 @@ static CrawlerStatus process_page(Crawl *crawl, const UrlQueueItem *item)
     size_t i;
     int allowed;
     VisitedStatus alias;
-    ++crawl->attempts; /* Caller checked the 100-attempt bound. */
+    ++crawl->attempts;
     if ((size_t)item->depth > crawl->stats->max_depth_reached) {
         crawl->stats->max_depth_reached = (size_t)item->depth;
     }
@@ -168,7 +168,7 @@ static CrawlerStatus process_page(Crawl *crawl, const UrlQueueItem *item)
         if (result == CRAWLER_OK) {
             result = CRAWLER_PARSE_ERROR;
         }
-        goto failed; /* Do NOT parse off-scope final bodies or their links. */
+        goto failed;
     }
     alias = visited_contains(&crawl->scheduled, final);
     if (alias != VISITED_PRESENT && alias != VISITED_NOT_FOUND) {
@@ -192,8 +192,8 @@ static CrawlerStatus process_page(Crawl *crawl, const UrlQueueItem *item)
         result = http_failure(downloaded);
         goto failed;
     }
-    /* Remember known final aliases even on 404/non-HTML/parse failure, so a
-     * queued direct URL is not an accidental retry of that failed target. */
+
+
     if (response.body == NULL || memchr(response.body, '\0', response.size) != NULL) {
         result = CRAWLER_PARSE_ERROR;
         goto failed;
@@ -227,7 +227,7 @@ static CrawlerStatus process_page(Crawl *crawl, const UrlQueueItem *item)
                 result = CRAWLER_OUT_OF_MEMORY;
                 goto done;
             }
-            continue; /* Invalid/unsupported references never get scheduled. */
+            continue;
         }
         result = in_scope(crawl, key, &allowed);
         if (result == CRAWLER_OK && allowed) {
@@ -268,8 +268,8 @@ failed:
     if (!add_count(&crawl->stats->pages_failed, 1)) {
         result = CRAWLER_LIMIT_REACHED;
     }
-    /* Recoverable child failures continue; root and resource/invariant errors
-     * abort. Final status becomes PARTIAL after draining if children failed. */
+
+
     if (crawl->attempts != 1 && result != CRAWLER_OUT_OF_MEMORY &&
         result != CRAWLER_INTERNAL_ERROR && result != CRAWLER_LIMIT_REACHED) {
         result = CRAWLER_OK;
@@ -331,7 +331,7 @@ static CrawlerStatus crawler_run_internal(const CrawlerConfig *config,
         }
         seen = visited_contains(&crawl.attempted, item.url);
         if (seen == VISITED_PRESENT) {
-            queue_item_free(&item); /* Known redirect target already attempted. */
+            queue_item_free(&item);
             continue;
         }
         if (seen != VISITED_NOT_FOUND) {

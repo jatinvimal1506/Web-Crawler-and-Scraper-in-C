@@ -89,7 +89,7 @@ VisitedStatus visited_insert(VisitedSet *set, const char *url)
         free(key);
         return VISITED_ERROR_OUT_OF_MEMORY;
     }
-    node->key = key; /* Keep the canonical allocation; no second string copy. */
+    node->key = key;
     node->next = set->head;
     set->head = node;
     ++set->count;

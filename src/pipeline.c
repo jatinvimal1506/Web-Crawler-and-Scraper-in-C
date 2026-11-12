@@ -108,7 +108,7 @@ static int result_is_empty(const PipelineResult *result)
 PipelineStatus pipeline_result_init(PipelineResult *result)
 {
     if (result == NULL) { return PIPELINE_ERROR_INVALID_ARGUMENT; }
-    /* Initialize fresh storage; release any owned paths before reinitializing. */
+
     *result = (PipelineResult){0};
     return PIPELINE_OK;
 }
@@ -467,7 +467,7 @@ static PipelineStatus process_one_document(
             download_status = download_document(&download_config, &download);
         }
         if (download_status == DOWNLOAD_ERROR_EXISTS) {
-            /* A file appeared after the precheck; try the next safe name. */
+
             download_result_free(&download);
             continue;
         }

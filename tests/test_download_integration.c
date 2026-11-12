@@ -315,7 +315,6 @@ int main(void)
     test_size_limit("/files/oversize-chunked.pdf", "oversize-chunked.pdf",
                     exact_size + 1, DOWNLOAD_ERROR_TOO_LARGE);
 
-    /* A colliding output name is rejected before an HTTP request. */
     expected_path(path, sizeof(path), "existing.pdf");
     {
         FILE *existing = fopen(path, "wb");

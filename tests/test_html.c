@@ -7,7 +7,6 @@
 
 static const char *const base = "https://example.com/dir/page.html?old=1";
 
-/* Compare the entire output, not just whether a link happened to be found. */
 static void expect(const char *input, const char *const *urls, size_t count)
 {
     HtmlLinks links = {0};
@@ -19,7 +18,7 @@ static void expect(const char *input, const char *const *urls, size_t count)
     }
     html_links_free(&links);
     assert(links.urls == NULL && links.count == 0);
-    html_links_free(&links); /* Cleanup can safely be repeated. */
+    html_links_free(&links);
 }
 
 static void test_normal(void)
@@ -52,7 +51,6 @@ static void test_duplicates(void)
     };
     expect("<a href='/x'>1</a><a href='../x'>2</a>"
            "<a href='https://example.com/x#other'>3</a>", expected, 3);
-    /* Duplicate attributes use the first occurrence, never the second. */
     expect("<a href='/x' href='/ignored'>x</a>", expected, 1);
     expect("<a href='' href='/ignored'><a href href='/ignored'>", NULL, 0);
     puts("PASS: duplicate links preserved; first href attribute wins");
@@ -219,7 +217,6 @@ static void test_malformed(void)
     expect("<a href='/unfinished'", NULL, 0);
     expect("<a href=\"/bad>text", NULL, 0);
     expect("<a title='>' href='/good'>", expected, 1);
-    /* A URL containing a slash is not cut off as though it were tag syntax. */
     {
         const char *trailing[] = {"https://example.com/trailing/"};
         expect("<a href=/trailing/>", trailing, 1);
@@ -254,7 +251,6 @@ static void test_ownership(void)
     char **saved;
     assert(html_extract_links(input, source, &links) == HTML_OK);
     saved = links.urls;
-    /* Reusing an occupied result cannot leak or overwrite the earlier list. */
     assert(html_extract_links("", base, &links) == HTML_ERROR_INVALID_ARGUMENT);
     assert(links.urls == saved && links.count == 1);
     input[0] = '\0';
@@ -284,7 +280,6 @@ static void test_boundaries(void)
         }
         html_links_free(&links);
     }
-    /* Exercise several realloc growth steps and keep document order. */
     {
         HtmlLinks links = {0};
         char many[8192];
@@ -314,8 +309,6 @@ static void test_truncations(void)
         "<a title='>' href='../x?a=1&amp;b=2'>x</a>"
         "<a href=/search&#63;q=one><a href=/end>";
     size_t i, length = strlen(sample);
-    /* Every possible prefix is its own properly NUL-terminated input buffer.
-     * Sanitizers can therefore detect any read past a truncated document. */
     for (i = 0; i <= length; ++i) {
         HtmlLinks links = {0};
         char *prefix = malloc(i + 1);

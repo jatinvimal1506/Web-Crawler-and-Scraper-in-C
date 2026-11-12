@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Conservative CLI: one digit 0..9 or exactly 10, not arbitrary strtol casts. */
+
 static int demo_depth(const char *text, size_t *depth)
 {
     if (strcmp(text, "10") == 0) {

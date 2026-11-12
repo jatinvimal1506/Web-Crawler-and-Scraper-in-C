@@ -1,9 +1,9 @@
-/*
- * Optional GNU-linker test, independent of the portable default test suite.
- * --wrap redirects allocations from html.c AND url.c through these functions.
- * This lets us fail each allocation deterministically without changing either
- * production module or depending on a machine actually running out of memory.
- */
+
+
+
+
+
+
 #include "html.h"
 
 #include <assert.h>
@@ -37,7 +37,7 @@ void *__wrap_realloc(void *pointer, size_t size)
     int was_null = pointer == NULL;
     void *grown;
     ++allocation_count;
-    /* Production code only requests positive sizes. */
+
     assert(size > 0);
     grown = allocation_count == fail_at ? NULL : __real_realloc(pointer, size);
     if (grown != NULL && was_null) {

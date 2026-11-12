@@ -86,7 +86,7 @@ int main(void)
         CHECK(crawler_run(&config, &stats) == CRAWLER_INVALID_ARGUMENT);
         CHECK(stats.pages_visited == 0 && stats.pages_failed == 0 &&
               stats.links_discovered == 0 && stats.bytes_downloaded == 0 && stats.max_depth_reached == 0);
-        requests(NULL, 0); /* Proof: no socket request for rejected configuration. */
+        requests(NULL, 0);
     }
     for (i = 0; i < sizeof(supported) / sizeof(supported[0]); ++i) {
         CHECK(http_download(url, supported[i], &response) == HTTP_OK);
@@ -146,7 +146,7 @@ int main(void)
     CHECK(response.body == NULL && response.size == 0);
     http_response_free(&response);
     requests((unsigned[]){FIX_HANG}, 1);
-    /* Standalone API intentionally STILL follows cross-host redirects. */
+
     (void)snprintf(url, sizeof(url), "%soff-redirect", seed);
     CHECK(http_download(url, 1, &response) == HTTP_OK);
     http_response_free(&response);

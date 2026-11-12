@@ -55,11 +55,11 @@ int main(void)
     CHECK(item.url != input);
     CHECK(strcmp(item.url, "https://example.com/owned") == 0);
     CHECK(item.depth == 12345);
-    queue_free(&queue); /* Transferred output must outlive its queue. */
+    queue_free(&queue);
     CHECK(strcmp(item.url, "https://example.com/owned") == 0);
     queue_item_free(&item);
 
-    /* More than 1000 pending nodes: no fixed small capacity. */
+
     for (i = 0; i < 1200; ++i) {
         char url[80];
         (void)snprintf(url, sizeof(url), "https://example.com/%zu", i);
@@ -86,7 +86,7 @@ int main(void)
     queue_free(NULL);
     queue_item_free(NULL);
     CHECK(queue_init(&queue) == QUEUE_OK);
-    /* Synthetic count boundary; restore immediately (not a valid real queue). */
+
     queue.count = SIZE_MAX;
     CHECK(queue_enqueue(&queue, "overflow", 0) == QUEUE_ERROR_OVERFLOW);
     CHECK(queue.head == NULL && queue.tail == NULL && queue.count == SIZE_MAX);

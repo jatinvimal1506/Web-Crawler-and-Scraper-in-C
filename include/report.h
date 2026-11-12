@@ -36,10 +36,6 @@ typedef enum {
     REPORT_ROW_SKIPPED_LIMIT
 } ReportRowStatus;
 
-/*
- * A single source-page/document relationship. All pointers are borrowed.
- * Pass an empty string for unavailable hash, path or error fields.
- */
 typedef struct {
     const char *document_url;
     DocumentType document_type;
@@ -52,8 +48,6 @@ typedef struct {
     const char *error_detail;
 } ReportRow;
 
-/* The caller owns the array, not the strings; each keyword is 1-64 printable
- * ASCII bytes and matching never edits them. */
 typedef struct {
     const char *const *keywords;
     size_t keyword_count;
@@ -61,51 +55,26 @@ typedef struct {
 
 typedef struct {
     ReportStatus status;
-    size_t rows_written;  /* Complete data records, excluding the header. */
-    size_t rows_excluded; /* Rows rejected by the optional keyword filter. */
-    char *output_path;    /* Owned on success or cleanup failure. */
+    size_t rows_written;
+    size_t rows_excluded;
+    char *output_path;
     char detail[256];
 } ReportResult;
 
 const char *report_status_message(ReportStatus status);
 const char *report_row_status_name(ReportRowStatus status);
-/* Initialize fresh or already-freed storage; free an owned path before reuse. */
 ReportStatus report_result_init(ReportResult *result);
-/* Free the owned path, reset the result; safe for NULL and repeated calls. */
 void report_result_free(ReportResult *result);
 
-/* Validate filter and filename values without allocation or filesystem access. */
 ReportStatus report_validate_filter(const ReportFilter *filter);
 ReportStatus report_validate_csv_basename(const char *safe_csv_basename);
 
-/*
- * Match one metadata row against zero to eight ASCII literal substrings.
- * Matching ignores ASCII letter case and checks either URL. An empty filter
- * includes every row. This function performs no allocation or I/O.
- */
-ReportStatus report_row_matches(const ReportRow *row,
-                                const ReportFilter *filter,
-                                int *matches);
 
-/*
- * Write selected rows to a new, exclusive-created CSV in an existing directory.
- * The directory, safe basename, rows and keyword strings are borrowed. The
- * filename must be a safe .csv basename no longer than 128 bytes. At most
- * 1000 rows and 4096 bytes per text field are accepted. All text columns are
- * quoted and formula-guarded; integer columns are decimal. Initialize result
- * with report_result_init() or {0};
- * never shallow-copy a result that owns output_path. Free it with
- * report_result_free().
- *
- * On failure, only a file created by this call is removed. If removal fails,
- * REPORT_ERROR_CLEANUP is returned and output_path remains owned by result.
- */
+ReportStatus report_row_matches(const ReportRow *row,const ReportFilter *filter,int *matches);
+//it checks whether the users keyword appears in the document URL or the source pagea URL.
+// and our filter examines URL information, not the internal text of PDF or word files.
 ReportStatus report_write_csv(const char *existing_output_directory,
-                              const char *safe_csv_basename,
-                              const ReportRow *rows,
-                              size_t row_count,
-                              const ReportFilter *filter,
-                              ReportResult *result);
+  const char *safe_csv_basename,const ReportRow *rows,size_t row_count,  const ReportFilter *filter, ReportResult *result);
 
 #ifdef __cplusplus
 }

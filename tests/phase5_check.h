@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 static size_t checks;
-/* Unlike assert(), checks and function calls remain active with NDEBUG. */
+
 #define CHECK(condition) do { \
     ++checks; \
     if (!(condition)) { \

@@ -35,44 +35,44 @@ typedef enum {
 } DownloadStatus;
 
 typedef struct {
-    const char *document_url;       /* Borrowed absolute HTTP(S) URL. */
-    const char *seed_url;           /* Borrowed URL defining redirect scope. */
-    int same_domain;                /* 1 pins exact seed host; both modes pin port. */
-    long timeout_seconds;            /* 1..3600 seconds per transfer hop. */
-    const char *output_directory;    /* Borrowed; must already exist. */
-    const char *filename;            /* Borrowed safe basename, not a path. */
+    const char *document_url;
+    const char *seed_url;
+    int same_domain;
+    long timeout_seconds;
+    const char *output_directory;
+    const char *filename;
 } DownloadConfig;
 
 typedef struct {
     DownloadStatus status;
     DocumentType type;
-    long http_status;                /* Last response code, or zero if none. */
-    size_t bytes_written;             /* Successfully written bytes, even on failure. */
-    char *final_url;                  /* Owned copy of last fetched effective URL. */
-    char *file_path;                  /* Owned on success or cleanup failure only. */
-    char detail[256];                 /* Short diagnostic; part of this structure. */
+    long http_status;
+    size_t bytes_written;
+    char *final_url;
+    char *file_path;
+    char detail[256];
 } DownloadResult;
 
-/* Initialize only a zeroed/empty result; this function does not allocate. */
-DownloadStatus download_result_init(DownloadResult *result);
-/* NULL-safe and repeatable; frees final_url/file_path and resets all fields. */
-void download_result_free(DownloadResult *result);
-const char *download_status_message(DownloadStatus status); /* Static string. */
 
-/*
- * Stream one recognized Phase 8 document to a new, exclusively-created file.
- * The destination directory must exist. The basename is restricted to ASCII
- * letters, digits, dot, dash and underscore; its extension must match the URL.
- * Existing files are never overwritten.
- *
- * The caller supplies an empty zero-initialized result and owns all inputs for
- * the duration of the call. On success, final_url and file_path are owned by
- * result and bytes_written is the complete file size. On ordinary failure,
- * a newly created partial file is removed and file_path is NULL; on a cleanup
- * error, file_path remains available to identify the file that could not be
- * removed. final_url/http_status/bytes_written are retained when known.
- * Always call download_result_free().
- */
+DownloadStatus download_result_init(DownloadResult *result);
+
+void download_result_free(DownloadResult *result);
+const char *download_status_message(DownloadStatus status);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 DownloadStatus download_document(const DownloadConfig *config,
                                  DownloadResult *result);
 

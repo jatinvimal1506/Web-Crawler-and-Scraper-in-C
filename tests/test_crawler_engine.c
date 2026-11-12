@@ -83,8 +83,8 @@ int main(void)
     run("/alias-site", 2, 1, CRAWLER_OK,
         (CrawlerStats){3, 0, 4, 2, crawler_fixture_body_size(FIX_ALIAS) + new_page + new_child});
     order((unsigned[]){FIX_ALIAS, FIX_REDIRECT, FIX_NEW_PAGE, FIX_NEW_CHILD}, 4);
-    /* Unknown alias AFTER direct fetch necessarily repeats final HTTP fetch.
-     * State this limitation honestly rather than pretending it was prevented. */
+
+
     run("/alias-reverse", 2, 1, CRAWLER_OK,
         (CrawlerStats){4, 0, 4, 2, crawler_fixture_body_size(FIX_ALIAS_REVERSE) + 2 * new_page + new_child});
     order((unsigned[]){FIX_ALIAS_REVERSE, FIX_NEW_PAGE, FIX_REDIRECT, FIX_NEW_PAGE, FIX_NEW_CHILD}, 5);
@@ -95,7 +95,7 @@ int main(void)
         (CrawlerStats){1, 1, 2, 1, crawler_fixture_body_size(FIX_NUL_ALIAS) + 4});
     order((unsigned[]){FIX_NUL_ALIAS, FIX_NUL_REDIRECT, FIX_NUL}, 3);
     run("/off-redirect", 1, 1, CRAWLER_PARSE_ERROR, (CrawlerStats){0, 1, 0, 0, 0});
-    order((unsigned[]){FIX_OFF_REDIRECT}, 1); /* Blocked destination NEVER requested. */
+    order((unsigned[]){FIX_OFF_REDIRECT}, 1);
     run("/off-redirect", 1, 0, CRAWLER_OK, (CrawlerStats){2, 0, 1, 1, off + 5});
     order((unsigned[]){FIX_OFF_REDIRECT, FIX_OFF_LANDING | FIX_LOCALHOST_BIT,
                       FIX_OFF_CHILD | FIX_LOCALHOST_BIT}, 3);

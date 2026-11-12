@@ -1,10 +1,4 @@
-/*
- * Phase 9: bounded binary document streaming.
- *
- * Unlike the HTML downloader, this module never collects the response body
- * into a memory buffer. libcurl calls write_file_chunk() as binary chunks
- * arrive, and each chunk is written directly to an exclusive-created file.
- */
+
 #ifndef _WIN32
 #define _POSIX_C_SOURCE 200809L
 #endif
@@ -313,7 +307,7 @@ static size_t write_file_chunk(void *data, size_t size, size_t count, void *opaq
     }
     bytes = size * count;
     if (status < 200 || status >= 300 || status == 206) {
-        return bytes; /* Ignore redirect/error bodies; never save them as files. */
+        return bytes;
     }
     if (!content_type_is_valid(transfer)) {
         transfer->content_type_invalid = 1;

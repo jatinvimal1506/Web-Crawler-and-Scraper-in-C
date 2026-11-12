@@ -169,7 +169,7 @@ int main(void)
         CHECK(is_directory(folder));
     }
 
-    /* A corrupted file at the digest name is a conflict, never overwritten. */
+
     CHECK(make_path(canonical_pdf, sizeof(canonical_pdf), test_root, "pdf"));
     {
         int written = snprintf(path, sizeof(path), "%s/%s.pdf",
@@ -199,7 +199,7 @@ int main(void)
     CHECK(contents_equal(first.stored_path, bytes_a, sizeof(bytes_a)));
     CHECK(contents_equal(input_a, bytes_a, sizeof(bytes_a)));
 
-    /* Same bytes and size from another file/type reuse the original PDF. */
+
     CHECK(organize_file(input_b, DOCUMENT_TYPE_DOCX, test_root, &duplicate) ==
           ORGANIZER_DUPLICATE);
     CHECK(duplicate.is_duplicate == 1);
@@ -207,7 +207,7 @@ int main(void)
     CHECK(strcmp(duplicate.stored_path, first.stored_path) == 0);
     CHECK(contents_equal(input_b, bytes_a, sizeof(bytes_a)));
 
-    /* Same-size different bytes remain distinct and go to the requested type. */
+
     CHECK(organize_file(input_c, DOCUMENT_TYPE_ZIP, test_root, &different) ==
           ORGANIZER_NEW_FILE);
     CHECK(different.is_duplicate == 0);

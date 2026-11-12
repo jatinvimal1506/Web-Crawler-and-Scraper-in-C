@@ -2,7 +2,7 @@
 #define URL_H
 #include <stddef.h>
 
-/* URL functions return a specific status so callers can report useful errors. */
+
 typedef enum {
     URL_OK = 0,
     URL_ERROR_INVALID_ARGUMENT,
@@ -25,14 +25,13 @@ typedef struct {
 
 //Parse an absolute HTTP(S) URL. Initialize result as {0} before its first use. On success it owns allocated components; free them with url_free(). A non-empty result is rejected so existing pointers are never overwritten.
 
-UrlStatus url_parse(const char *input, ParsedUrl *result);// breaks URL into components such as scheme,hostname,port,path and query.
+UrlStatus url_parse(const char *input, ParsedUrl *result);
 
 void url_free(ParsedUrl *url);
 UrlStatus url_normalize(const char *input, char **output);
-// URL normalize converts equivalent URL spellings into a consitent form, helping us recognize duplicate addresses.
-UrlStatus url_resolve(const char *base, const char *relative, char **output);//creates realtive links into absolute URLs.
+UrlStatus url_resolve(const char *base, const char *relative, char **output);
 
-/* Return a static status description; do not modify or free it. */
+
 const char *url_status_message(UrlStatus status);
 
 #endif

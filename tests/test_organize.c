@@ -215,7 +215,6 @@ int main(void)
 
     CHECK(organize_file(INPUT_A, DOCUMENT_TYPE_UNKNOWN, TEST_ROOT, &invalid_type) ==
           ORGANIZER_ERROR_INVALID_TYPE);
-    /* A live result cannot be reused or overwritten accidentally. */
     CHECK(organize_file(INPUT_A, DOCUMENT_TYPE_PDF, TEST_ROOT, &pdf) ==
           ORGANIZER_ERROR_INVALID_ARGUMENT);
     CHECK(pdf.stored_path != NULL && pdf.status == ORGANIZER_NEW_FILE);

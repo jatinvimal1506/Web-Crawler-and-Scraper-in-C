@@ -21,9 +21,8 @@ typedef struct {
 QueueStatus queue_init(UrlQueue *queue);
 QueueStatus queue_size(const UrlQueue *queue, size_t *size);
 QueueStatus queue_is_empty(const UrlQueue *queue, int *empty);
-//Linked-list linking is O(1); copying a URL of length L makes enqueue O(L).
-QueueStatus queue_enqueue(UrlQueue *queue, const char *url, int depth);// inserts a new URL into the queue with its depth.
-QueueStatus queue_dequeue(UrlQueue *queue, UrlQueueItem *item);//removes the oldest waiting URL
+QueueStatus queue_enqueue(UrlQueue *queue, const char *url, int depth);
+QueueStatus queue_dequeue(UrlQueue *queue, UrlQueueItem *item);
 void queue_item_free(UrlQueueItem *item);
 void queue_free(UrlQueue *queue);
 #endif

@@ -1,8 +1,8 @@
-/*
- * Deterministic C-only HTTP fixtures. A tiny child process serves loopback
- * responses; the parent calls the REAL public HTTP and HTML APIs.
- * POSIX fork/sockets are test-only, not new production dependencies.
- */
+
+
+
+
+
 #ifndef _WIN32
 #define _POSIX_C_SOURCE 200809L
 #endif
@@ -10,9 +10,9 @@
 #ifdef HTTP_ALLOC_TEST
 #include <stdlib.h>
 
-/* Only the separately compiled HTTP object uses these replacements. The
- * installed library, URL module and libcurl itself are not changed/intercepted.
- * HTTP's malloc calls copy metadata; realloc/calloc own the response body. */
+
+
+
 static size_t metadata_allocations, fail_metadata_at, http_live_allocations;
 void *http_test_malloc(size_t size);
 void *http_test_realloc(void *pointer, size_t size);
@@ -35,7 +35,7 @@ void *http_test_realloc(void *pointer, size_t size)
     int was_null = pointer == NULL;
     void *grown;
     if (size == 0) {
-        abort(); /* The HTTP body always requests a positive allocation. */
+        abort();
     }
     grown = realloc(pointer, size);
     if (grown != NULL && was_null) {
@@ -57,7 +57,7 @@ void http_test_free(void *pointer)
 {
     if (pointer != NULL) {
         if (http_live_allocations == 0) {
-            abort(); /* A wrong/double free must not pass allocation accounting. */
+            abort();
         }
         --http_live_allocations;
     }
@@ -93,7 +93,7 @@ static pid_t fixture_pid = -1;
 static unsigned fixture_port;
 static unsigned checks;
 
-/* Unlike assert(), failures run atexit cleanup and work even with NDEBUG. */
+
 #define CHECK(condition) do { \
     ++checks; \
     if (!(condition)) { \
@@ -114,7 +114,7 @@ static void stop_fixture(void)
     http_cleanup();
 }
 
-/* send() may transmit fewer bytes than requested, even on loopback. */
+
 static int send_all(int fd, const void *data, size_t size)
 {
     const char *p = data;
@@ -124,7 +124,7 @@ static int send_all(int fd, const void *data, size_t size)
             continue;
         }
         if (sent <= 0) {
-            return 0; /* Expected when the client rejects an oversized body. */
+            return 0;
         }
         p += sent;
         size -= (size_t)sent;
@@ -155,7 +155,7 @@ static void serve_response(int fd, const char *path)
     } else if (strcmp(path, "/html") == 0) {
         type = "TeXt/HtMl \t; charset=UTF-8";
     } else if (strcmp(path, "/html-no-type") == 0) {
-        type = NULL; /* Valid HTML detected by the existing fallback heuristic. */
+        type = NULL;
     } else if (strcmp(path, "/xhtml") == 0) {
         type = "Application/XHTML+XML; charset=UTF-8";
     } else if (strcmp(path, "/fake-type") == 0) {
@@ -263,7 +263,7 @@ static void start_fixture(void)
     CHECK(listener >= 0);
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    address.sin_port = 0; /* OS chooses a free port; no fixed-port collisions. */
+    address.sin_port = 0;
     CHECK(bind(listener, (struct sockaddr *)&address, sizeof(address)) == 0);
     CHECK(getsockname(listener, (struct sockaddr *)&address, &length) == 0);
     fixture_port = ntohs(address.sin_port);
@@ -276,7 +276,7 @@ static void start_fixture(void)
     }
     (void)close(listener);
     CHECK(atexit(stop_fixture) == 0);
-    /* Only this test process: external proxy settings must not route fixtures. */
+
     CHECK(setenv("no_proxy", "127.0.0.1", 1) == 0);
 }
 
@@ -302,8 +302,8 @@ static void expect_failure(const char *path, HttpStatus expected)
     CHECK(response.body == NULL && response.size == 0);
     CHECK(response.detail[0] != '\0');
     if (expected == HTTP_ERR_NETWORK) {
-        /* Not merely a DNS/connect/file error: curl must reject the protocol.
-         * Accept both usual libcurl phrasings across supported versions. */
+
+
         CHECK(strstr(response.detail, "Protocol") != NULL ||
               strstr(response.detail, "protocol") != NULL);
         CHECK(strstr(response.detail, "disabled") != NULL ||
@@ -327,12 +327,12 @@ static void expect_metadata_oom(const char *path, size_t fail_at)
     CHECK(response.body == NULL && response.size == 0);
     CHECK(response.final_url == NULL && response.content_type == NULL);
     CHECK(response.status_code == 0 && response.detail[0] != '\0');
-    CHECK(http_live_allocations == 0); /* Cleanup happens inside the failing call. */
+    CHECK(http_live_allocations == 0);
     http_response_free(&response);
     http_response_free(&response);
     CHECK(http_live_allocations == 0);
 
-    /* The same structure can immediately be reused for a successful request. */
+
     fail_metadata_at = 0;
     metadata_allocations = 0;
     CHECK(download_path(path, &response) == HTTP_OK);
@@ -345,11 +345,11 @@ static void expect_metadata_oom(const char *path, size_t fail_at)
 static void test_metadata_allocations(void)
 {
     HttpResponse response = {0};
-    expect_metadata_oom("/html", 1); /* Effective/final URL copy. */
-    expect_metadata_oom("/html", 2); /* Present Content-Type copy, after URL copy. */
-    expect_metadata_oom("/html-no-type", 1); /* URL copy without a header. */
+    expect_metadata_oom("/html", 1);
+    expect_metadata_oom("/html", 2);
+    expect_metadata_oom("/html-no-type", 1);
 
-    /* The nonexistent second allocation must not turn an absent header into OOM. */
+
     metadata_allocations = 0;
     fail_metadata_at = 2;
     CHECK(download_path("/html-no-type", &response) == HTTP_OK);
@@ -377,7 +377,7 @@ int main(void)
     CHECK(response.final_url != NULL);
     CHECK(strcmp(response.final_url, expected) == 0);
     CHECK(html_extract_links(response.body, response.final_url, &links) == HTML_OK);
-    http_response_free(&response); /* Output must not borrow HTTP body memory. */
+    http_response_free(&response);
     (void)snprintf(expected, sizeof(expected),
                    "http://127.0.0.1:%u/docs/notes.pdf?download=one&x=two",
                    fixture_port);

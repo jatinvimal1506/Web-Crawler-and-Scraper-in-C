@@ -74,7 +74,7 @@ int main(void)
     }
     CHECK(visited_size(&set, &size) == VISITED_OK && size == 1200);
     visited_free(&set);
-    /* Synthetic count overflow; restore before normal use/cleanup. */
+
     set.count = SIZE_MAX;
     CHECK(visited_insert(&set, "https://example.com/overflow") == VISITED_ERROR_OVERFLOW);
     CHECK(set.head == NULL && set.count == SIZE_MAX);

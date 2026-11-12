@@ -1,4 +1,4 @@
-/* URL parsing, canonicalization, and common HTTP reference resolution. */
+
 #include "url.h"
 
 #include <ctype.h>
@@ -18,7 +18,7 @@ static char *copy_text(const char *start, size_t length)
     return copy;
 }
 
-/* Host labels follow the ASCII DNS hostname limits used by this project. */
+
 static int valid_host(const char *host, size_t length)
 {
     size_t label_length = 0;
@@ -70,7 +70,7 @@ static int hex_digit(unsigned char c)
            (c >= 'A' && c <= 'F');
 }
 
-/* Accept URI ASCII characters and require every percent escape to be complete. */
+
 static int valid_url_characters(const char *text, size_t length)
 {
     size_t i;
@@ -112,10 +112,10 @@ void url_free(ParsedUrl *url)
     *url = (ParsedUrl){0};
 }
 
-/*
- * Parse one absolute HTTP(S) URL. Build into a temporary structure so that
- * partial allocation failures can be cleaned without exposing partial output.
- */
+
+
+
+
 UrlStatus url_parse(const char *input, ParsedUrl *result)
 {
     ParsedUrl parsed = {0};
@@ -130,7 +130,7 @@ UrlStatus url_parse(const char *input, ParsedUrl *result)
     if (input == NULL || result == NULL) {
         return URL_ERROR_INVALID_ARGUMENT;
     }
-    /* Do not silently discard caller-owned pointers from an earlier parse. */
+
     if (!field_is_empty(result)) {
         return URL_ERROR_INVALID_ARGUMENT;
     }
@@ -244,7 +244,7 @@ fail:
     return status;
 }
 
-/* Pop the last output path segment for the RFC-style /../ transformation. */
+
 static void remove_last_segment(char *output, size_t *length)
 {
     while (*length > 0 && output[*length - 1] != '/') {
@@ -262,10 +262,10 @@ static void remove_prefix(char *input, size_t count)
     memmove(input, input + count, remaining + 1);
 }
 
-/*
- * Apply RFC-style dot-segment removal while preserving repeated separators
- * and trailing slash meaning. The input path is absolute and bounded.
- */
+
+
+
+
 static char *normalize_path(const char *path)
 {
     size_t length = strlen(path);
@@ -333,7 +333,7 @@ static int is_default_port(const ParsedUrl *url)
          (strcmp(url->scheme, "https") == 0 && value == 443));
 }
 
-/* Build scheme://authority plus a path/query/optional fragment tail. */
+
 static UrlStatus build_url(const ParsedUrl *url, const char *tail, char **output)
 {
     size_t need = strlen(url->scheme) + 3 + strlen(url->host) + strlen(tail) + 1;

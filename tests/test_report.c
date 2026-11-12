@@ -50,13 +50,13 @@ static void test_matching(void)
     filter.keywords = one_keyword;
     filter.keyword_count = 1U;
     CHECK(report_row_matches(&row, &filter, &matches) == REPORT_OK);
-    CHECK(matches == 1); /* ASCII case-insensitive match in document URL. */
+    CHECK(matches == 1);
     CHECK(memcmp(keyword_before, mutable_keyword, sizeof(mutable_keyword)) == 0);
 
     filter.keywords = two_keywords;
     filter.keyword_count = 2U;
     CHECK(report_row_matches(&row, &filter, &matches) == REPORT_OK);
-    CHECK(matches == 1); /* Any keyword may match the source-page URL. */
+    CHECK(matches == 1);
 
     filter.keywords = no_keywords;
     filter.keyword_count = 1U;
@@ -149,7 +149,7 @@ static void test_invalid_filters_and_rows(void)
     row.sha256_hex = "not-a-lowercase-sha256";
     filter.keyword_count = 0U;
     CHECK(report_row_matches(&row, &filter, &matches) == REPORT_OK);
-    CHECK(matches == 1); /* Filtering does not depend on download outcome. */
+    CHECK(matches == 1);
 
     row = sample_row();
     row.document_url = "";
@@ -169,7 +169,7 @@ static void test_invalid_filters_and_rows(void)
     metadata_only.document_url = "https://example.test/report.pdf";
     metadata_only.source_page_url = "https://example.test/source";
     CHECK(report_row_matches(&metadata_only, &filter, &matches) == REPORT_OK);
-    CHECK(matches == 1); /* Phase 12 can filter before download results exist. */
+    CHECK(matches == 1);
 }
 
 static void test_status_names(void)

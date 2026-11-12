@@ -1,4 +1,4 @@
-/* Phase 4: a small, conservative anchor scanner, not an HTML5 parser. */
+
 #include "html.h"
 #include "url.h"
 
@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* HTML defines these five ASCII whitespace bytes, independent of locale. */
+
 static int html_space(char c)
 {
     return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f';
@@ -17,7 +17,7 @@ static char ascii_lower(char c)
     return c >= 'A' && c <= 'Z' ? (char)(c + ('a' - 'A')) : c;
 }
 
-/* Compare a bounded slice, without allocating a temporary C string. */
+
 static int name_is(const char *start, size_t length, const char *name)
 {
     size_t i;
@@ -32,8 +32,8 @@ static int name_is(const char *start, size_t length, const char *name)
     return 1;
 }
 
-/* Locate an actual tag end: a '>' inside a quoted attribute is not the end.
- * A new '<' outside quotes is a recovery point for a broken previous tag. */
+
+
 static const char *tag_end(const char *p)
 {
     char quote = '\0';
@@ -51,9 +51,9 @@ static const char *tag_end(const char *p)
     return p;
 }
 
-/* Decode the practical ASCII entity subset supported by our URL module.
- * Return 1 if decoded, 0 for an unknown name, -1 for an invalid numeric entity.
- * The caller preserves unknown names literally; decoding is never recursive. */
+
+
+
 static int entity_byte(const char *p, size_t length, char *byte)
 {
     static const struct { const char *name; char byte; } named[] = {
@@ -83,14 +83,14 @@ static int entity_byte(const char *p, size_t length, char *byte)
             } else {
                 return -1;
             }
-            /* Bound before multiplying, so enormous numbers cannot overflow. */
+
             if (digit >= base || value > (127U - digit) / base) {
                 return -1;
             }
             value = value * base + digit;
         }
         if (value == 0) {
-            return -1; /* Never insert a NUL into the middle of a URL. */
+            return -1;
         }
         *byte = (char)value;
         return 1;
@@ -105,9 +105,9 @@ static int entity_byte(const char *p, size_t length, char *byte)
     return 0;
 }
 
-/* Inspect one semicolon-terminated reference without allocating. Both the
- * scanner and decoder use this, so encoded '?'/'#' affect query context once,
- * not the literal '#' in the spelling of a numeric reference. */
+
+
+
 static int entity_at(const char *start, const char *end, char *byte,
                      size_t *consumed)
 {
@@ -127,8 +127,8 @@ static int entity_at(const char *start, const char *end, char *byte,
     return found;
 }
 
-/* Allocate a decoded href. Each supported entity shrinks, so length+1 is
- * enough. Invalid numeric entities produce an empty href, which is skipped. */
+
+
 static char *decode_href(const char *start, size_t length)
 {
     char *decoded;
@@ -161,8 +161,8 @@ static char *decode_href(const char *start, size_t length)
     return decoded;
 }
 
-/* Read attributes only inside this opening tag. The first href wins,
- * including a boolean/empty href: later duplicates must not override it. */
+
+
 static void find_href(const char *p, const char *end,
                       const char **value, size_t *length)
 {
@@ -176,7 +176,7 @@ static void find_href(const char *p, const char *end,
             ++p;
         }
         if (p == end || (*p == '/' && p + 1 == end)) {
-            return; /* End of attributes, including a self-closing marker. */
+            return;
         }
         name = p;
         while (p < end && !html_space(*p) && *p != '=' && *p != '/' &&
@@ -185,7 +185,7 @@ static void find_href(const char *p, const char *end,
         }
         name_length = (size_t)(p - name);
         if (name_length == 0) {
-            return; /* Do not invent an href after a stray '=' or quote. */
+            return;
         }
         is_href = name_is(name, name_length, "href");
         while (p < end && html_space(*p)) {
@@ -216,7 +216,7 @@ static void find_href(const char *p, const char *end,
                 ++p;
                 if (p < end && !html_space(*p) &&
                     !(*p == '/' && p + 1 == end)) {
-                    return; /* Attributes need a separator after a quote. */
+                    return;
                 }
             }
         } else {
@@ -225,9 +225,9 @@ static void find_href(const char *p, const char *end,
             while (p < end && !html_space(*p)) {
                 char syntax = *p;
                 size_t consumed = 1;
-                /* Browsers tolerate '=' in unquoted query strings. Never
-                 * treat those bytes as new attributes; whitespace ends value.
-                 * Keep other malformed unquoted values conservative. */
+
+
+
                 if (*p == '"' || *p == '\'' || *p == '`') {
                     return;
                 }
@@ -253,8 +253,8 @@ static void find_href(const char *p, const char *end,
     }
 }
 
-/* Resolve and append one candidate. Only allocation failure aborts a page;
- * invalid URLs and unsafe schemes are ordinary skipped links. */
+
+
 static HtmlStatus append_href(HtmlLinks *links, size_t *capacity,
                                const char *base, const char *value,
                                size_t length, size_t maximum)
@@ -299,7 +299,7 @@ static HtmlStatus append_href(HtmlLinks *links, size_t *capacity,
         if (next > maximum) {
             next = maximum;
         }
-        /* Use a temporary: failed realloc leaves the original array intact. */
+
         grown = realloc(links->urls, next * sizeof(*grown));
         if (grown == NULL) {
             free(resolved);
@@ -386,7 +386,7 @@ HtmlStatus html_extract_links_limited(const char *html, const char *base_url,
             continue;
         }
         if (raw_name != NULL) {
-            /* A malformed closing tag must not expose raw-text fake anchors. */
+
             raw_name = NULL;
             p = end + 1;
             continue;
@@ -411,7 +411,7 @@ HtmlStatus html_extract_links_limited(const char *html, const char *base_url,
             };
             size_t i;
             if (name_is(name, length, "plaintext")) {
-                break; /* HTML plaintext never returns to markup, even at </plaintext>. */
+                break;
             }
             for (i = 0; i < sizeof(raw_tags) / sizeof(raw_tags[0]); ++i) {
                 if (name_is(name, length, raw_tags[i])) {
@@ -422,7 +422,7 @@ HtmlStatus html_extract_links_limited(const char *html, const char *base_url,
         }
         p = end + 1;
     }
-    *result = links; /* Transfer ownership only after the entire scan succeeds. */
+    *result = links;
     return HTML_OK;
 }
 

@@ -33,7 +33,7 @@ static DocumentStatus run(const char *path, size_t depth, int same_domain,
     CHECK(document_results_init(results) == DOCUMENT_OK);
     {
         DocumentStatus status = document_discover(&config, results, stats);
-        CHECK(strcmp(url, original) == 0); /* Caller-owned input is unchanged. */
+        CHECK(strcmp(url, original) == 0);
         return status;
     }
 }
@@ -79,7 +79,7 @@ int main(void)
     CHECK(stats.pages_visited == 1 && stats.pages_failed == 0 &&
           stats.links_discovered == 4 && stats.max_depth_reached == 0 &&
           stats.bytes_downloaded == body_home);
-    request_order((unsigned[]){FIX_DOC_HOME}, 1); /* No document URL was fetched. */
+    request_order((unsigned[]){FIX_DOC_HOME}, 1);
     document_results_free(&results);
 
     CHECK(run("/doc-home", 1, 1, &results, &stats) == DOCUMENT_OK);
@@ -106,7 +106,6 @@ int main(void)
     record = document_results_at(&results, 3);
     CHECK(record != NULL && strcmp(record->url, expected_research) == 0 &&
           record->type == DOCUMENT_TYPE_PDF && record->source_count == 1);
-    /* Reusing a populated result is rejected without destroying its data. */
     CHECK(document_discover(&(CrawlerConfig){seed, 1, 1, 2}, &results, &stats) ==
           DOCUMENT_ERROR_INVALID_ARGUMENT);
     CHECK(document_results_count(&results) == 4 && stats.pages_visited == 0);
@@ -150,7 +149,7 @@ int main(void)
                    "http://localhost:%u/files/offscope.pdf", port);
     CHECK(strcmp(document_results_at(&results, 0)->url, expected_scope_doc) == 0);
     CHECK(document_results_at(&results, 0)->sources[0].depth == 0);
-    request_order((unsigned[]){FIX_DOC_SCOPE}, 1); /* In-scope URL is recorded, not fetched. */
+    request_order((unsigned[]){FIX_DOC_SCOPE}, 1);
     document_results_free(&results);
 
     CHECK(run("/doc-canon", 1, 0, &results, &stats) == DOCUMENT_OK);
@@ -161,7 +160,7 @@ int main(void)
     document_results_free(&results);
 
     CHECK(run("/doc-query", 1, 1, &results, &stats) == DOCUMENT_OK);
-    CHECK(document_results_count(&results) == 2); /* Meaningful queries remain distinct. */
+    CHECK(document_results_count(&results) == 2);
     CHECK(document_results_source_count(&results) == 2);
     request_order((unsigned[]){FIX_DOC_QUERY}, 1);
     document_results_free(&results);

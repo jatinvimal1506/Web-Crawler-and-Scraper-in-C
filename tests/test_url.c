@@ -6,74 +6,49 @@
 #include <stdlib.h>
 #include <string.h>
 
-/*
- * Test a URL that should be accepted.
- *
- * expected_host and expected_path tell us
- * what the parser should extract.
- */
 static void test_valid(
     const char *input,
     const char *expected_host,
     const char *expected_path)
 {
-    // Start with all pointers initialized to NULL.
     ParsedUrl url = {0};
 
-    // Call our URL parsing function.
     int status = url_parse(input, &url);
 
-    // Parsing must succeed.
     assert(status == 0);
 
-    // The extracted hostname must match.
     assert(strcmp(url.host, expected_host) == 0);
 
-    // The extracted path must match.
     assert(strcmp(url.path, expected_path) == 0);
 
-    // Release dynamically allocated strings.
     url_free(&url);
 }
 
-/*
- * Test a URL that should be rejected.
- */
 static void test_invalid(const char *input)
 {
     ParsedUrl url = {0};
 
-    // Invalid URLs must return a non-success status.
     int status = url_parse(input, &url);
 
     assert(status != URL_OK);
 
-    // No memory should be left allocated.
     assert(url.scheme == NULL);
     assert(url.host == NULL);
     assert(url.path == NULL);
 }
 
-/*
- * Test a complete URL containing a port,
- * path, query and fragment.
- */
 static void test_complete_url(void)
 {
-    // Initialize every structure field to NULL.
     ParsedUrl url = {0};
 
     const char *input =
         "https://example.com:8080/products"
         "?color=red#reviews";
 
-    // Parse the complete URL.
     int status = url_parse(input, &url);
 
-    // Verify that parsing succeeded.
     assert(status == 0);
 
-    // Verify each extracted component.
     assert(strcmp(url.scheme, "https") == 0);
     assert(strcmp(url.host, "example.com") == 0);
     assert(strcmp(url.port, "8080") == 0);
@@ -81,7 +56,6 @@ static void test_complete_url(void)
     assert(strcmp(url.query, "color=red") == 0);
     assert(strcmp(url.fragment, "reviews") == 0);
 
-    // Display the parsed information.
     printf("Scheme:   %s\n", url.scheme);
     printf("Host:     %s\n", url.host);
     printf("Port:     %s\n", url.port);
@@ -89,18 +63,13 @@ static void test_complete_url(void)
     printf("Query:    %s\n", url.query);
     printf("Fragment: %s\n", url.fragment);
 
-    // Release allocated memory.
     url_free(&url);
 }
 
-/*
- * Test optional URL components.
- */
 static void test_optional_components(void)
 {
     ParsedUrl url = {0};
 
-    // URL contains no port, query or fragment.
     assert(url_parse("https://example.com", &url) == 0);
 
     assert(strcmp(url.path, "/") == 0);
@@ -110,7 +79,6 @@ static void test_optional_components(void)
 
     url_free(&url);
 
-    // URL contains a query but no explicit path.
     assert(url_parse("https://example.com?x=1", &url) == 0);
 
     assert(strcmp(url.path, "/") == 0);
@@ -118,8 +86,6 @@ static void test_optional_components(void)
 
     url_free(&url);
 
-    // An explicitly empty query is not the same
-    // as a missing query.
     assert(url_parse("https://example.com/?", &url) == 0);
 
     assert(url.query != NULL);
@@ -128,12 +94,8 @@ static void test_optional_components(void)
     url_free(&url);
 }
 
-/*
- * Test invalid port values.
- */
 static void test_invalid_ports(void)
 {
-    // Reuse the test_invalid helper from Part 2.2.
     test_invalid("https://example.com:");
     test_invalid("https://example.com:abc");
     test_invalid("https://example.com:0");
@@ -157,9 +119,9 @@ static void test_status_codes(void)
 
     assert(url_parse("https://example.com/", &url) == URL_OK);
     assert(url_parse("https://other.example/", &url) == URL_ERROR_INVALID_ARGUMENT);
-    assert(strcmp(url.host, "example.com") == 0); /* Existing ownership is preserved. */
+    assert(strcmp(url.host, "example.com") == 0);
     url_free(&url);
-    url_free(&url); /* Clearing makes a second free safe. */
+    url_free(&url);
 }
 
 static void test_path_normalization(void)
@@ -230,7 +192,6 @@ static void test_reference_resolution(void)
                        &result) == URL_ERROR_UNSUPPORTED_SCHEME);
     assert(result == NULL);
 
-    /* Absolute references repeatedly exercise the formerly leaking branch. */
     for (i = 0; i < 10000; ++i) {
         assert(url_resolve("https://example.com/base/", "https://other.test/x",
                            &result) == URL_OK);
@@ -274,7 +235,6 @@ static void test_url_boundaries(void)
     assert(url_resolve("bad base", "x", &result) == URL_ERROR_INVALID_FORMAT);
     assert(result == NULL);
 
-    /* Exercise the maximum-length query as well as maximum-length paths. */
     {
         char query_url[2050];
         const char *query_prefix = "https://a.test/?";
@@ -289,7 +249,6 @@ static void test_url_boundaries(void)
         assert(url_parse(query_url, &parsed) == URL_ERROR_TOO_LONG);
     }
 
-    /* Maximum DNS hostname and label sizes, then one over each limit. */
     {
         char host[256];
         char full_url[280];
@@ -313,9 +272,6 @@ static void test_url_boundaries(void)
 int main(void)
 {
     char *normalized = NULL, *resolved = NULL;
-    /*
-     * TEST GROUP 1: Valid URLs
-     */
     test_valid(
         "https://example.com/about",
         "example.com",
@@ -334,9 +290,6 @@ int main(void)
         "/products"
     );
 
-    /*
-     * TEST GROUP 2: Invalid URLs
-     */
     test_invalid(NULL);
     test_invalid("");
     test_invalid("example.com");
@@ -349,9 +302,6 @@ int main(void)
     test_invalid("https://example.com/%XZ");
     test_invalid("https://example.com:abc");
 
-    /*
-     * TEST GROUP 3: Boundary cases
-     */
     char large_url[2100];
     test_complete_url();
     test_optional_components();
@@ -360,7 +310,6 @@ int main(void)
     printf("\nAll URL tests passed.\n");
 
 
-    // Build a valid URL whose length exceeds the parser limit.
     const char *long_url_prefix = "https://example.com/";
     size_t prefix_length = strlen(long_url_prefix);
     memcpy(large_url, long_url_prefix, prefix_length);
@@ -371,9 +320,6 @@ int main(void)
 
     test_invalid(large_url);
 
-    /*
-     * TEST GROUP 4: Invalid output pointer
-     */
     assert(url_parse("https://example.com", NULL) == URL_ERROR_INVALID_ARGUMENT);
 
     assert(url_normalize("HTTP://Example.COM:80/a/./b/../c?q=1#part", &normalized) == URL_OK);

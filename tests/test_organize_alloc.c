@@ -234,7 +234,7 @@ static void test_io_failures(const char *digest)
     CHECK(live_allocations == 0);
 
     read_calls = 0;
-    fail_read_at = 3U; /* First read in the copy after the input has been hashed. */
+    fail_read_at = 3U;
     CHECK(organize_file(INPUT_PATH, DOCUMENT_TYPE_PDF, root, &result) ==
           ORGANIZER_ERROR_READ);
     fail_read_at = 0;
@@ -316,7 +316,7 @@ int main(void)
     CHECK(input_unchanged());
     organize_result_free(&result);
     CHECK(live_allocations == 0);
-    /* The injected remove failure is consumed; now the test owns cleanup. */
+
     remove_root_files(baseline_root, digest);
     CHECK(mkdir(baseline_root, 0700) == 0);
     CHECK(organizer_prepare_directories(baseline_root) == ORGANIZER_OK);

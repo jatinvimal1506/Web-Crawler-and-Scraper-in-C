@@ -50,10 +50,6 @@ int main(int argc, char **argv)
     printf("          LIVE DEMO PIPELINE\n");
     printf("==========================================\n\n");
 
-    /* ==========================================================
-     * Phase 1: CLI and Public API
-     * Demonstrates input argument handling and calling crawler_run()
-     * ========================================================== */
     printf("[PHASE 1] CLI AND PUBLIC API\n\n");
     printf("Input URL: %s\n", url[0] != '\0' ? url : "(empty)");
     printf("Calling the existing project API (crawler_run)...\n");
@@ -72,10 +68,6 @@ int main(int argc, char **argv)
                stats.pages_visited);
     }
 
-    /* ==========================================================
-     * Phase 2: URL Parsing and Validation
-     * Uses url_parse() to validate the URL and extract components
-     * ========================================================== */
     printf("\n[PHASE 2] URL PARSING\n\n");
     url_status = url_parse(url, &parsed);
     if (url_status == URL_OK) {
@@ -98,10 +90,6 @@ int main(int argc, char **argv)
     }
     url_free(&parsed);
 
-    /* ==========================================================
-     * Phase 3: HTTP Downloader
-     * Uses http_download() via libcurl to fetch the webpage
-     * ========================================================== */
     printf("\n[PHASE 3] HTTP DOWNLOADER\n\n");
     printf("Downloading webpage...\n\n");
     http_status = http_download(url, DOWNLOAD_TIMEOUT_SECONDS, &response);

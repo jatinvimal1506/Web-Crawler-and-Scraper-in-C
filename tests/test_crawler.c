@@ -13,7 +13,7 @@ int main(void)
 
     stats = (CrawlerStats){99, 99, 99, 99, 99};
     assert(crawler_run(&config, NULL) == CRAWLER_INVALID_ARGUMENT);
-    /* Linked with the deterministic empty-HTML C transport fixture. */
+
     assert(crawler_run(&config, &stats) == CRAWLER_OK);
     assert(stats.pages_visited == 1 && stats.pages_failed == 0 &&
            stats.links_discovered == 0 && stats.max_depth_reached == 0 &&

@@ -58,9 +58,9 @@ static char *clone(const char *s)
     return p;
 }
 
-/* Only this TEST object dispatches a fake transfer for HTTP->HTTPS URL-policy
- * validation. All ordinary profiles call the real checked curl transport.
- * This proves scope logic, NOT a local TLS handshake/certificate validation. */
+// Only this TEST object dispatches a fake transfer for HTTP->HTTPS URL-policy
+// validation. All ordinary profiles call the real checked curl transport.
+// This proves scope logic, NOT a local TLS handshake/certificate validation.
 HttpStatus http_download_once(const char *url, long timeout,
                              HttpResponse *response, char **location)
 {

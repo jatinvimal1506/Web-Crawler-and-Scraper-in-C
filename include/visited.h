@@ -20,7 +20,7 @@ typedef struct {
 } VisitedSet;
 VisitedStatus visited_init(VisitedSet *set);
 VisitedStatus visited_size(const VisitedSet *set, size_t *size);
-VisitedStatus visited_contains(const VisitedSet *set, const char *url);//checks whether a normalized URL is already recorded
-VisitedStatus visited_insert(VisitedSet *set, const char *url);// stores a new normalized URL.
+VisitedStatus visited_contains(const VisitedSet *set, const char *url);
+VisitedStatus visited_insert(VisitedSet *set, const char *url);
 void visited_free(VisitedSet *set);
 #endif

@@ -1,5 +1,5 @@
-/* In-memory HTTP fixture for the basic API and exhaustive engine OOM tests.
- * This is NEVER archived into the production library. */
+
+
 #include "http.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,8 +9,8 @@
 int crawler_stub_mode;
 size_t crawler_stub_calls;
 
-/* The basic API/engine fault tests stay portable and entirely in-memory.
- * The real scoped transport has separate local + allocation test targets. */
+
+
 HttpStatus http_download_scoped(const char *url, long timeout,
                                const char *seed, int same_domain, HttpResponse *response)
 {

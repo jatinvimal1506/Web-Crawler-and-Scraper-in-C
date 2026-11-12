@@ -1,4 +1,4 @@
-/* C-only POSIX loopback server for deterministic binary-download tests. */
+
 #ifndef _WIN32
 #define _POSIX_C_SOURCE 200809L
 #endif

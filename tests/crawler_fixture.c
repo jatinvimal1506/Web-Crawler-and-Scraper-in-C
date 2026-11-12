@@ -1,4 +1,4 @@
-/* Deliberately small loopback-only C HTTP fixture, not production server code. */
+
 #ifndef _WIN32
 #define _POSIX_C_SOURCE 200809L
 #endif
@@ -292,7 +292,7 @@ static void serve(int fd, unsigned id)
     int status = id == FIX_MISSING ? 404 : id == FIX_BOOM ? 500 : 200;
     const char *type = id == FIX_PDF ? "application/pdf" : "text/html";
     int written;
-    if (id == FIX_DROP) { return; } /* Empty transport response, no HTTP header. */
+    if (id == FIX_DROP) { return; }
     location[0] = '\0';
     if (id == FIX_HANG) {
         struct timespec delay = {1, 500000000L};
@@ -332,7 +332,7 @@ static void serve(int fd, unsigned id)
         else if (n >= 8 && n <= 14) {
             (void)snprintf(location, sizeof(location), "Location: /safety/%u\r\n", n + 1);
         } else if (n == 15) { status = 200; }
-        else if (n == 16) { /* intentionally no Location */ }
+        else if (n == 16) {   }
         else if (n == 17) { target = "http:// bad.invalid/"; }
         else if (n == 18) { target = "file:///tmp/forbidden"; }
         else if (n == 19) { target = "data:text/html,forbidden"; }
@@ -392,7 +392,7 @@ static void server_loop(int listener, int other_listener)
             unsigned id = route_id(path);
             unsigned record = id | (strstr(request, "Host: localhost:") != NULL
                                    ? FIX_LOCALHOST_BIT : 0);
-            /* 4-byte atomic records: even the 100-page case cannot fill pipe. */
+
             require(write(request_writer, &record, sizeof(record)) == (ssize_t)sizeof(record));
             serve(fd, id);
         }
@@ -417,7 +417,7 @@ unsigned crawler_fixture_start(void)
     require(refused_socket >= 0);
     require(bind(refused_socket, (struct sockaddr *)&address, sizeof(address)) == 0);
     require(getsockname(refused_socket, (struct sockaddr *)&address, &size) == 0);
-    refused_port = ntohs(address.sin_port); /* Reserved but never listening. */
+    refused_port = ntohs(address.sin_port);
     other_listener = socket(AF_INET, SOCK_STREAM, 0);
     address.sin_port = 0;
     require(other_listener >= 0);
