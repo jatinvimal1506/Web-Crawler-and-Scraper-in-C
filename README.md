@@ -1,398 +1,472 @@
-# DeepDownload-C
+﻿# DeepDownload-C
+### Web Crawler and Document Downloader in C
 
-This university project is a reusable C11 static library with separate C CLI
-demos. Phases 1–12 include the crawler, URL/HTTP/HTML modules, reusable queue
-and visited set, bounded BFS, PDF/DOCX/ZIP link discovery, one-document
-streaming, local hashing/organization, metadata filtering, CSV reporting, and
-the bounded end-to-end pipeline. No Phase 13 or later work is included.
+## 1. Project Overview
 
-## Build on Linux / Replit
+DeepDownload-C is a web crawling and document downloading application developed using the C programming language.
 
-GCC, GNU Make and libcurl development files are required.
+The main purpose of this project is to automatically explore websites, discover useful documents, download them, identify duplicate files, organize the downloaded documents, and generate a report.
 
-```sh
-cd DeepDownload-C # from the surrounding Replit project; omit if already here
-make
-make test-unit   # deterministic API, URL and HTML tests
-make test-phase5 # offline queue and visited tests
-make test-phase5-alloc # deterministic queue/visited/URL allocation failures
-make test-crawler-engine # deterministic loopback BFS/redirect/scope/stats tests
-make test-crawler-alloc # whole-engine allocation-failure and invariant tests
-make test-http-local # C-only loopback HTTP fixtures (POSIX; Windows prints SKIP)
-make test-http-alloc # adds deterministic HTTP metadata-copy OOM tests
-make test-document # URL-extension classification and API tests
-make test-document-integration # C-only local BFS/provenance tests
-make test-document-alloc # injected result/crawler allocation failures
-make test-download # downloader API, validation and scope-policy tests
-make test-download-integration # C-only local binary/redirect/filesystem tests
-make test-download-alloc # injected allocation and file-I/O failure tests
-make test-sha256 # known-answer and file-size-boundary checks
-make test-organize # folder, content deduplication and ownership checks
-make test-organize-integration # local filesystem and conflict checks
-make test-organize-alloc # allocation and file-I/O failure injection
-make test-report # metadata keyword-matching tests
-make test-report-csv # exact CSV encoding and filesystem tests
-make test-report-alloc # injected allocation, write, close and cleanup failures
-make test-pipeline # pipeline API and validation tests
-make test-pipeline-integration # C-only local end-to-end and CLI tests
-make test-pipeline-alloc # deterministic pipeline allocation-failure tests
-make test        # includes local fixtures and original network-dependent tests
+The system starts with a URL provided by the user. It visits webpages, extracts links, identifies supported document files, and processes them through an automated pipeline.
+
+The project supports the discovery and downloading of:
+
+- PDF (`.pdf`)
+- Microsoft Word (`.docx`)
+- ZIP archives (`.zip`)
+
+Unlike a basic web crawler that only visits webpages and collects links, DeepDownload-C goes one step further by downloading and managing the documents found during crawling.
+
+---
+
+## 2. Project Objectives
+
+The main objectives of this project are:
+
+1. To understand how web crawling works internally.
+2. To implement Breadth-First Search (BFS) for systematic webpage traversal.
+3. To extract and process links from HTML pages.
+4. To discover PDF, DOCX, and ZIP documents.
+5. To download documents directly from websites.
+6. To prevent unnecessary duplicate downloads.
+7. To organize downloaded files automatically.
+8. To filter documents using user-provided keywords.
+9. To generate CSV reports containing document information.
+10. To integrate all components into one automated pipeline.
+
+---
+
+## 3. Technologies Used
+
+| Technology | Purpose |
+|---|---|
+| C (C11) | Main programming language |
+| libcurl | HTTP and HTTPS communication |
+| Makefile | Project compilation and build automation |
+| SHA-256 | Document fingerprinting and duplicate detection |
+| HTML processing | Extracting links from webpages |
+| CSV | Generating document reports |
+| Git and GitHub | Version control and collaboration |
+
+---
+
+## 4. How the Project Works
+
+The project follows an automated process.
+
+1. The user provides a starting website URL.
+2. The crawler downloads the webpage.
+3. HTML links are extracted.
+4. New webpage URLs are added to a FIFO queue.
+5. A visited URL structure prevents repeated processing.
+6. The crawler follows links using Breadth-First Search.
+7. Supported document links are identified separately.
+8. Discovered documents are filtered using keywords, if configured.
+9. Selected documents are downloaded.
+10. SHA-256 hashes are calculated to identify duplicates.
+11. Unique files are organized into folders.
+12. A CSV report is generated.
+
+### Overall Workflow
+
+```text
+             USER INPUT
+                 |
+                 v
+          STARTING URL
+                 |
+                 v
+           WEB CRAWLER
+                 |
+                 v
+          HTML LINK EXTRACTION
+                 |
+          +------+------+
+          |             |
+          v             v
+     WEBPAGE LINKS   DOCUMENT LINKS
+          |             |
+          v             v
+      BFS QUEUE     DOCUMENT DISCOVERY
+          |             |
+          v             v
+     VISIT PAGES    KEYWORD FILTERING
+                        |
+                        v
+                  DOCUMENT DOWNLOAD
+                        |
+                        v
+                   SHA-256 HASH
+                        |
+                        v
+                 DUPLICATE CHECK
+                        |
+                        v
+                 FILE ORGANIZATION
+                        |
+                        v
+                   CSV REPORT
 ```
 
-Linux executables include `build/crawler-demo`, `build/demo_pipeline`,
-`build/crawler-bfs`, `build/discover-documents`, `build/download-document` and
-`build/deepdownload`.
-For beginner explanations, see [`documentation/phase4.md`](documentation/phase4.md),
-[`documentation/phase10.md`](documentation/phase10.md),
-[`documentation/phase12.md`](documentation/phase12.md), and
-[`documentation/api.md`](documentation/api.md).
+---
 
-## Build on Windows
+## 5. Phase-wise Development
 
-Use MSYS2 UCRT64 GCC and GNU Make with libcurl available.
+The project was developed in multiple phases. Each phase introduced a new feature and built upon the previous implementation.
 
-```powershell
+### Phase 1 – Project Foundation
+
+Established the basic project structure, C source files, header files, and build configuration.
+
+Created the foundation required to develop the project as separate reusable modules.
+
+### Phase 2 – URL Processing
+
+Implemented URL parsing, normalization, and resolution.
+
+This allows the crawler to understand different URL formats and convert relative links into complete URLs.
+
+Important functions:
+- `url_parse()`
+- `url_normalize()`
+- `url_resolve()`
+
+### Phase 3 – HTTP/HTTPS Communication
+
+Integrated libcurl to communicate with websites.
+
+Implemented webpage downloading and handling of HTTP responses.
+
+This phase enabled the program to retrieve webpage content from remote servers.
+
+### Phase 4 – HTML Link Extraction
+
+Implemented HTML processing to identify hyperlinks present on downloaded webpages.
+
+The extracted links become the input for further crawling.
+
+### Phase 5 – Queue and Visited URL Management
+
+Implemented two important data structures using Singly Linked Lists (SLL).
+
+**Queue:**
+- Follows FIFO (First In, First Out).
+- Stores URLs waiting to be processed.
+- Supports enqueue and dequeue operations.
+
+**Visited URL List:**
+- Stores URLs that have already been scheduled or attempted.
+- Helps prevent unnecessary repeated processing.
+
+### Phase 6 – Complete BFS Web Crawler
+
+Integrated URL processing, HTTP communication, HTML extraction, queue management, and visited URL tracking.
+
+Implemented Breadth-First Search (BFS) to visit webpages level by level.
+
+The crawler starts from a given URL, extracts links, schedules new webpages, and continues until the configured crawling limits are reached.
+
+Important functions:
+- `crawler_run()`
+- `crawler_run_with_link_observer()`
+
+### Phase 7 – Crawler Safety
+
+Added safety restrictions to make crawling more controlled.
+
+Implemented:
+- URL scope validation.
+- Redirect destination validation.
+- HTTPS downgrade prevention.
+- Request timeout restrictions.
+- Maximum response body size.
+- Redirect limits.
+
+Important function:
+- `http_download_scoped()`
+
+### Phase 8 – Document Discovery
+
+Extended the crawler to identify supported documents separately from normal webpages.
+
+The system identifies PDF, DOCX, and ZIP files using their URL extensions.
+
+It also records the source webpage from which each document was discovered.
+
+Important functions:
+- `document_type_from_url()`
+- `document_discover()`
+
+### Phase 9 – Document Downloading
+
+Implemented a dedicated document downloader.
+
+Features include:
+- Binary file downloading.
+- Direct streaming of downloaded data to files.
+- Maximum file-size restriction.
+- HTTP response and content-type validation.
+- Safe file creation without accidental overwriting.
+
+The downloader uses streaming instead of loading the entire document into memory.
+
+Important function:
+- `download_document()`
+
+### Phase 10 – Duplicate Detection and File Organization
+
+Implemented SHA-256 hashing to identify duplicate documents.
+
+The system calculates a fingerprint for each downloaded file and compares it with previously stored files.
+
+When hashes match, the actual file contents are compared to confirm whether the files are identical.
+
+Unique documents are organized into folders according to their file types.
+
+Important functions:
+- `sha256_file()`
+- `organize_file()`
+
+### Phase 11 – Keyword Filtering and CSV Reporting
+
+Added keyword-based document filtering.
+
+The system checks the user-provided keyword against:
+- Document URLs.
+- Source webpage URLs.
+
+Matching is case-insensitive.
+
+The system also generates CSV reports containing document information and source-document relationships.
+
+Important functions:
+- `report_row_matches()`
+- `report_write_csv()`
+
+Note: Keyword filtering operates on URLs, not on the internal contents of PDF or DOCX files.
+
+### Phase 12 – Complete Pipeline Integration
+
+Integrated all previously developed modules into one automated workflow.
+
+The user provides the starting URL and configuration. The pipeline coordinates crawling, document discovery, filtering, downloading, duplicate detection, file organization, and CSV reporting.
+
+Important functions:
+- `pipeline_run()`
+- `pipeline_result_free()`
+
+This phase converts the individual modules into one complete application.
+
+---
+
+## 6. Data Structures Used
+
+### Singly Linked List
+
+Singly Linked Lists are used for queue and visited URL management.
+
+Each node stores data and a pointer to the next node.
+
+### FIFO Queue
+
+The queue follows First In, First Out (FIFO).
+
+The first URL inserted is the first URL processed.
+
+This structure supports Breadth-First Search.
+
+### Visited URL List
+
+Maintains records of URLs that have already been scheduled or attempted.
+
+It helps the crawler avoid repeatedly adding or processing the same URL.
+
+**Why Singly Linked Lists?**
+
+We selected Singly Linked Lists because they are simple to implement, easy to understand, and suitable for this educational project.
+
+A hash table could provide faster average lookup for visited URLs, but linked lists offer a straightforward implementation with explicit memory management.
+
+---
+
+## 7. Project Features
+
+- Automated website crawling.
+- Breadth-First Search traversal.
+- HTML link extraction.
+- URL parsing and normalization.
+- HTTP and HTTPS support through libcurl.
+- URL scope and redirect safety checks.
+- PDF, DOCX, and ZIP discovery.
+- Document downloading through streaming.
+- File-size restrictions.
+- SHA-256-based duplicate detection.
+- Automatic file organization.
+- Keyword-based filtering.
+- CSV report generation.
+- Modular C implementation.
+
+---
+
+## 8. Project Structure
+
+The project follows a modular structure, separating public interfaces from their implementations.
+
+```text
+DeepDownload-C/
+|
+|-- include/
+|   |-- url.h
+|   |-- queue.h
+|   |-- visited.h
+|   |-- http.h
+|   |-- html.h
+|   |-- project.h
+|   |-- document.h
+|   |-- download.h
+|   |-- sha256.h
+|   |-- organize.h
+|   |-- report.h
+|   |-- pipeline.h
+|
+|-- src/
+|   |-- URL processing implementation
+|   |-- Queue implementation
+|   |-- Visited URL implementation
+|   |-- HTTP implementation
+|   |-- HTML processing implementation
+|   |-- Crawler implementation
+|   |-- Document discovery implementation
+|   |-- Document downloading implementation
+|   |-- SHA-256 implementation
+|   |-- File organization implementation
+|   |-- Reporting implementation
+|   |-- Pipeline integration
+|
+|-- examples/
+|   |-- deepdownload.c
+|
+|-- tests/
+|
+|-- Notes/
+|
+|-- Makefile
+|-- README.md
+```
+
+*Note: This is a conceptual representation of the main modules. Refer to the actual repository for the complete file list.*
+
+---
+
+## 9. Building the Project
+
+### Prerequisites
+
+- C compiler supporting C11.
+- GNU Make.
+- libcurl development files and required dependencies.
+
+### Compilation
+
+Open the project directory in a terminal and run:
+
+```bash
 make
+```
+
+### Running Tests
+
+```bash
 make test
 ```
 
-The Makefile builds `build/libcrawler.a`, the existing crawler demos,
-`build/discover-documents.exe`, `build/download-document.exe`,
-`build/deepdownload.exe` and test programs.
-Native Windows execution is not verified here; POSIX loopback integration and
-fault-injection targets print SKIP on native Windows.
+### Cleaning Build Files
 
-The older presentation demo still calls individual APIs in sequence; the actual
-Phase 12 integration CLI is `deepdownload`:
-
-```powershell
-.\build\deepdownload.exe START_URL OUTPUT_ROOT REPORT.csv [DEPTH] [SAME_DOMAIN] [--keyword WORD]...
+```bash
+make clean
 ```
 
-`OUTPUT_ROOT` must already exist. Depth defaults to 1 (the CLI accepts 0–3),
-same-domain defaults to 1, and the request timeout is a fixed 3 seconds. Use
-only a site you own or have permission to access. Exit code 0 means the bounded
-run completed; 1 means partial results or a safety limit; 2 means invalid input
-or a fatal error.
+The exact executable location and command-line arguments depend on the project's current Makefile and CLI implementation.
 
-## Part 1: public crawler API
+Check the project's usage instructions or executable help before running the application.
 
-`include/project.h` defines the crawler status, configuration, statistics, and
-`crawler_run` API. Phase 6 now performs actual BFS. Invalid calls zero available
-stats and return INVALID_ARGUMENT; root failures are errors; child failures
-continue and finish PARTIAL. LIMIT_REACHED means deliberately incomplete.
-NOT_IMPLEMENTED remains a legacy enum value, not the valid-run behavior.
+---
 
-## Part 2: URL handling
+## 10. Output and Results
 
-`include/url.h` and `src/url.c` provide HTTP(S) URL parsing, validation, normalization, relative URL resolution, and cleanup. `ParsedUrl` exposes scheme, host, optional explicit port, path, query, and fragment. Parsed component strings are heap allocated and released with `url_free`.
+The application produces two main types of output.
 
-## Part 3: HTTP downloader
+### A. Organized Documents
 
-`include/http.h` and `src/http.c` provide `http_download` for one HTTP(S) page. It uses libcurl, follows redirects, applies a timeout and body-size limit, and reports HTTP status, response size, content type, final URL, and structured failures. Successful response fields are owned by the caller and released with `http_response_free`; call `http_cleanup` when finished.
+Downloaded documents are stored in folders according to their file types.
 
-The presentation pipeline demo calls its standalone URL/downloader functions
-separately; `crawler_run` itself already performs bounded BFS.
+Example:
 
-## Current status
-
-The Phase 12 bounded pipeline is implemented and integrated. It does not claim
-to exhaustively crawl a site. See [`documentation/progress.md`](documentation/progress.md)
-and [`documentation/architecture.md`](documentation/architecture.md) for the
-current boundaries and test coverage.
-
-## Phase 4: HTML hyperlink extraction
-
-`include/html.h` and `src/html.c` provide `html_extract_links`,
-`html_links_free` and `html_status_message`. The extractor accepts page HTML
-and its final base URL, decodes practical HTML escapes, filters unsafe schemes
-and uses the existing `url_resolve` to return owned absolute HTTP(S) URLs.
-Duplicates stay in document order. It does not fetch links or change
-`crawler_run`.
-
-Run `make test-html` for the offline HTML suite and `make test-html-alloc`
-for optional GNU-linker allocation-failure tests.
-
-The targeted HTTP corrections require exact HTML/XHTML MIME media-type tokens
-(parameters allowed) and restrict initial/redirect protocols to HTTP(S), without
-disabling TLS verification. Local C fixtures verify redirect resolution,
-non-HTML rejection and the response size boundary. Public API signatures remain
-unchanged. See `documentation/phase4-test-results.md` for actual results and
-limitations.
-
-Metadata copy failures now return out-of-memory with cleared owned response
-fields instead of a partial success. The HTML scanner excludes iframe and
-other supported raw-text blocks and recognizes entity-encoded question marks
-in unquoted queries. Queue/visited and Phase 6 BFS are now implemented.
-
-## Phase 5: queue and visited URLs
-
-`include/queue.h` provides a linked FIFO queue. Enqueue copies a nonempty URL
-and a nonnegative `int` depth; dequeue transfers the owned string to an item
-that the caller frees with `queue_item_free`. A queue containing `(A,0)`,
-`(B,1)`, `(C,2)` returns those items in exactly that order. A head/tail list
-makes linking/removal constant-time; copying the URL costs O(URL length).
-
-`include/visited.h` provides a simple linked set of canonical absolute HTTP(S)
-keys from the existing `url_normalize`. For example,
-`HTTPS://Example.COM:443/docs#top` and `https://example.com/docs` identify one
-key. Distinct paths/queries stay distinct. Membership/insertion is O(n*L),
-favoring clarity over hash-table scale. Duplicate, missing, invalid and
-out-of-memory outcomes are separate. Both containers own their allocations;
-`queue_free` and `visited_free` reset them for repeated cleanup/reuse.
-
-Start containers/items with `{0}`; do not shallow-copy populated containers.
-Queue strings are not validated/normalized by the queue itself.
-See [the student guide](documentation/phase5.md) for every function, pointer,
-allocation and error behavior as of Phase 5. Current integration and failure
-contracts are in the Phase 6 documents linked below.
-
-The Markdown-only [prompt history](prompt%20history/2026-11-07-project-history.md)
-and dated Phase 5–12 instructions/hand-offs record the project decisions and
-acceptance evidence. No AI, GUI, browser automation or parallel crawling is
-implemented.
-
-## Phase 6: actual bounded BFS, controlled demonstration
-
-No config fields were added. FIFO depth starts at zero. Only unseen canonical
-HTTP(S) keys are enqueued, then marked scheduled; any failed mark aborts with
-cleanup. A second visited set tracks attempts and learned redirect aliases.
-There are no automatic retries. See
-[design/contracts](prompt%20history/2026-11-08-phase6-design-decisions.md) and
-[acceptance/handoff](prompt%20history/2026-11-08-phase6-handoff.md).
-
-Safety limits: **100 HTTP download attempts, 1000 emitted href candidates,
-1000 scheduled/alias keys**, existing 5 MiB response cap, five redirects per
-download and configured request timeout. Stats count attempts, not every
-redirect hop. Depth also stops before incrementing INT_MAX. CRAWLER_OK means
-the in-scope, depth-bounded queue drained with no failed pages—not that an
-entire website or the Internet was exhaustively crawled.
-
-`same_domain=1` pins the exact canonical seed hostname, not subdomains.
-**Both modes pin the effective seed port**, so removing a nondefault port
-cannot silently select another local service. Mode 0 permits other hosts on
-that port. Phase 7 checks every redirect URL BEFORE its request through the
-additive scoped downloader (maximum five hops). Blocked host/port targets are
-not fetched. HTTPS->HTTP downgrade is also refused. Standalone `http_download`
-retains automatic redirects for callers that explicitly use that API.
-This is NOT an IP/DNS firewall, SSRF defense or automatic robots-policy engine.
-Use only controlled/permissioned sites under their owner's policy; no bypass
-of logins, CAPTCHA, blocks or restrictions is implemented.
-
-All executable demo/fixture code is C:
-
-```sh
-make
-make build/crawler-fixture
-./build/crawler-fixture --demo
+```text
+output/
+|
+|-- PDF/
+|   |-- document_hash_1.pdf
+|   |-- document_hash_2.pdf
+|
+|-- DOCX/
+|   |-- document_hash_3.docx
+|
+|-- ZIP/
+    |-- document_hash_4.zip
 ```
 
-That command starts a loopback fixture and actually runs
-`crawler-bfs URL 2 1`. The local graph has two siblings and one grandchild;
-the CLI prints its real status and all five stats. For an interactive fixture,
-run `./build/crawler-fixture`, then in another terminal:
+The actual filenames and directory layout are determined by the organizer implementation.
 
-```sh
-./build/crawler-bfs http://127.0.0.1:PRINTED_PORT/site 2 1
-```
+### B. CSV Report
 
-Press Enter in the fixture terminal to stop. CLI defaults: depth 1, same-domain
-1, timeout 3 seconds; CLI depth is conservatively restricted to 0..10.
-The original `crawler-demo` and `demo_pipeline` are retained. The legacy
-pipeline also performs a separate standalone download, so it is not an
-exact-once BFS demonstration. The controlled launcher requires POSIX and
-prints SKIP on native Windows; native Windows execution is NOT VERIFIED.
+A CSV report is generated containing information about discovered documents and their source webpages.
 
-## Phase 7 hardening and final validation
+This makes it easier to review the documents found during crawling.
 
-Supported timeout for both HTTP and crawler APIs is **1..3600 seconds**.
-Zero/negative/LONG_MAX/3601 are rejected before networking; essential curl
-option failures abort setup. The scoped API uses this timeout per individual
-transfer; up to six transfers (five redirects) can occur per logical page.
-There is no whole-crawl wall-clock timer. CLI timeout remains 3 seconds.
+---
 
-```sh
-make test-phase7-safety
-make test-phase7-alloc
-```
+## 11. Limitations
 
-Both join `make test`. The public four-field config/five-field stats and
-existing signatures remain source-compatible. HTTP_ERR_SCOPE is appended;
-root scope rejection maps to PARSE_ERROR, child rejection to eventual PARTIAL.
-Existing stats keep their Phase 6 definitions; blocked targets no longer
-contribute bytes because they are never fetched.
+The current implementation has the following limitations:
 
-See [decisions/fixes](prompt%20history/2026-11-09-phase7-decisions-and-fixes.md)
-and [current validation/handoff](prompt%20history/2026-11-09-phase7-acceptance-and-handoff.md).
-Earlier Phase 6 history records describe the old post-fetch policy and are
-intentionally preserved, not silently rewritten.
+1. Only PDF, DOCX, and ZIP documents are supported.
+2. Document type identification is based on URL extensions.
+3. Keyword filtering checks document and source webpage URLs, not document contents.
+4. SHA-256 is used for duplicate identification, with byte comparison when hashes match.
+5. Crawling and downloading are subject to configured safety and resource limits.
+6. Websites requiring JavaScript execution to generate their links may not expose those links to the HTML extraction process.
+7. Authentication-protected pages may not be accessible without the required credentials.
 
-Phase 10 provides standalone hashing and organization for one completed local
-file. Phase 11 adds reusable metadata filtering and CSV reporting. Phase 12
-connects these modules through the bounded pipeline described below.
-No mode/configuration change, paid upgrade or deployment was made.
+---
 
-## Phase 8: public-document link discovery and provenance
+## 12. Future Improvements
 
-`include/document.h` and `src/document.c` add `document_discover` and
-`document_type_from_url`. The classifier looks only at the URL path extension:
-`.pdf`, `.docx` and `.zip` are recognized without fetching or guessing file
-content. The discovery observer runs while the existing C11 BFS processes
-in-scope HTML links. It stores each normalized document URL once and records
-each normalized source-page URL plus its crawl depth once. Repeated links and
-fragment-only URL variants do not duplicate a record/source pair; meaningful
-query differences remain distinct.
+Possible future improvements include:
 
-`document_discover` filters recognized document URLs out of the page queue and
-does not download them. Phase 9 adds a separate single-URL operation; it does
-not automatically download every discovered record.
-Ordinary HTTP(S) links with other extensions remain normal crawler candidates.
-Results own their strings and arrays; callers initialize with `{0}` or
-`document_results_init`, read with the accessors, and release with
-`document_results_free`. Linear searches keep this beginner-scale collection
-simple (membership can take O(n)); results are limited to 1000 occurrences.
-See `documentation/api.md`, `documentation/architecture.md`,
-`documentation/testing.md`, and the Phase 8 files in `prompt history/`.
+- Support for additional document formats.
+- Content-based document type detection.
+- Full-text document searching.
+- More efficient URL lookup using hash tables.
+- Parallel downloading.
+- Improved retry and recovery mechanisms.
+- More detailed reporting and statistics.
+- A graphical user interface.
 
-Try the controlled local demonstration with `make build/crawler-fixture`,
-then `./build/crawler-fixture --documents`. It starts the C loopback fixture
-and runs `build/discover-documents`; no external site is contacted.
+---
 
-## Phase 9: one-document binary streaming
+## 13. Conclusion
 
-`include/download.h` and `src/download.c` provide
-`download_document(config, result)` for one recognized PDF, DOCX or ZIP URL.
-The extension is classified by the existing Phase 8 URL helper. The libcurl
-write callback streams exact bytes to a caller-selected file; it never builds a
-whole binary body in memory or treats it as a C string. The per-file cap is
-20 MiB: exactly 20 MiB is accepted, and any additional byte fails. PDF, DOCX
-and ZIP MIME types are checked; one `application/octet-stream` header is an
-explicit fallback, while missing, duplicate, HTML and unrelated types fail.
-MIME labels do not prove document structure.
+DeepDownload-C demonstrates how a complete web crawling and document downloading system can be developed using the C programming language.
 
-The caller supplies an existing output directory and a safe basename with the
-matching extension. Names are restricted to ASCII letters, digits, dot, dash
-and underscore, up to 128 bytes; paths, traversal, Windows device names and
-trailing dots/spaces are rejected. Exclusive file creation prevents overwrite.
-The file is visible during streaming (not atomically published); failed
-transfers remove only the file created by that call. A failed cleanup has a
-distinct status and preserves the path for diagnosis.
+The project combines fundamental concepts such as linked lists, queues, Breadth-First Search, HTTP communication, file handling, hashing, and modular programming.
 
-Redirects are followed manually, at most five. Each HTTP(S) target is parsed
-and checked **before** its request. Both policy modes keep the seed's effective
-port; same-domain mode also requires the exact seed hostname. HTTPS downgrade
-is blocked and TLS verification remains enabled. This is not an IP/DNS
-firewall. The timeout is 1–3600 seconds per hop.
+Instead of only collecting webpage links, the system discovers documents, downloads them, identifies duplicates, organizes unique files, and generates reports.
 
-```sh
-make build/download-document
-./build/download-document DOCUMENT_URL SEED_URL OUTPUT_DIRECTORY safe-name.pdf 1
-./build/download-document DOCUMENT_URL SEED_URL OUTPUT_DIRECTORY safe-name.pdf 1 3
-make test-download
-make test-download-integration
-make test-download-alloc
-```
+The project helped us understand how different C modules can work together to create a practical application while maintaining control over memory management, network communication, and file operations.
 
-The CLI handles exactly one URL and prints its status, type, HTTP status, byte
-count, final URL and path. It does not organize files or bulk-download Phase 8
-results. Phase 10 provides a separate local-file hashing/organization library;
-it does not interpret PDF/DOCX/ZIP internals. See
-`documentation/api.md`, `documentation/architecture.md`,
-`documentation/testing.md`, and the Phase 9 files in `prompt history/` for
-ownership, limitations and measured test results.
+---
 
-## Phase 10: SHA-256 and type-based organization
-
-`include/sha256.h` and `src/sha256.c` provide dependency-free, incremental
-SHA-256 for a file up to 20 MiB. `include/organize.h` and `src/organize.c`
-organize one already-downloaded PDF, DOCX or ZIP into an existing output root's
-`pdf/`, `docx/` or `zip/` folder. Files are named by their lowercase SHA-256.
-Identical bytes are compared and deduplicated across all three folders; the
-input is never modified, and an existing destination is never overwritten.
-New copies are hashed and size-checked after writing. The code uses a fixed
-16 KiB buffer rather than loading a document into memory.
-
-```sh
-make test-sha256
-make test-organize
-make test-organize-integration
-make test-organize-alloc
-```
-
-These are C tests. The integration and allocator fault-injection suites use
-POSIX filesystem facilities and explicitly skip on native Windows. See
-[`documentation/phase10.md`](documentation/phase10.md) for the APIs, memory
-ownership, failure behavior and scope. The full Phase 10 instruction and
-evidence-based handoff are in `prompt history/`.
-
-Phase 10 remains a reusable one-file operation. Phase 11 remains a reusable
-metadata/reporting module. Phase 12 connects them through a bounded workflow.
-
-## Phase 11: metadata keyword filtering and CSV
-
-`include/report.h` and `src/report.c` provide an allocation-free metadata
-matcher and a bounded CSV writer. Up to eight borrowed ASCII keywords (1–64
-characters each) are matched case-insensitively as literal substrings against
-either the document URL or its source-page URL. An empty keyword list includes
-all rows. This searches metadata only; it never reads or extracts PDF, DOCX or
-ZIP contents.
-
-The CSV contains one row for each source-document relationship in the supplied
-order, using the documented nine-column schema. Text is quoted, embedded quotes
-are doubled, CR/LF inside fields are preserved, and rows end in CRLF. Fields
-that could begin a spreadsheet formula are prefixed with an apostrophe before
-quoting. The writer accepts at most 1,000 rows and 4,096 bytes per text field,
-requires an existing directory and a safe `.csv` basename, and exclusively
-creates the file rather than overwriting one. If no rows match, it writes the
-header only.
-
-`ReportRow` pointers are borrowed for each call. A `ReportResult` owns
-`output_path` only after success or when cleanup of a failed new file itself
-fails; release it with `report_result_free`. Failed and skipped rows cannot
-claim a stored hash or path. `report_row_matches` inspects only the two
-metadata URLs, so the Phase 12 pipeline filters before download outcomes exist.
-
-```sh
-make test-report
-make test-report-csv
-make test-report-alloc
-```
-
-The metadata unit suite is portable C. CSV filesystem and fault-injection tests
-use POSIX temporary directories and explicitly skip on native Windows. Phase 12
-composes these modules but never inspects document contents. See
-[`documentation/phase11.md`](documentation/phase11.md),
-[`documentation/phase12.md`](documentation/phase12.md), and the prompt-history
-handoffs for test counts, ownership and limitations.
-
-## Phase 12: bounded end-to-end pipeline
-
-`include/pipeline.h` and `src/pipeline.c` connect document discovery, metadata
-keyword filtering, the existing one-document downloader, SHA-256
-organization/deduplication, and the safe provenance CSV writer. The CLI is
-`build/deepdownload`:
-
-```sh
-mkdir -p output
-./build/deepdownload START_URL output report.csv [DEPTH 0..3] [SAME_DOMAIN 0|1] [--keyword WORD]...
-make test-pipeline
-make test-pipeline-integration
-make test-pipeline-alloc
-```
-
-The output directory must already exist. Discovery order is preserved;
-keyword matching uses document/source URL metadata; at most ten selected unique
-documents are downloaded; and the CSV retains a row for every selected
-source/document relationship. Identical bytes are reported as duplicates, not
-stored twice. Failures and resource ceilings produce explicit partial/limited
-statuses, never a claim of exhaustive success. `PipelineConfig` strings and
-keywords are borrowed for the call. `PipelineResult` owns its report path and
-any paths left behind when cleanup itself fails; release them with
-`pipeline_result_free`.
-
-The deterministic integration target starts a C-only loopback server and runs
-the actual CLI. It checks BFS order/depth, filters, redirected relative-link
-provenance, duplicate content, failed pages/downloads, limits, report safety,
-timeouts and cleanup. Native Windows execution is not verified; POSIX fixture
-tests explicitly skip there. See [`documentation/phase12.md`](documentation/phase12.md)
-for the beginner-oriented API, memory, resource-limit and test explanations.
+**Project:** DeepDownload-C  
+**Language:** C (C11)  
+**Team:** Three Musketeers
